@@ -6,16 +6,918 @@
 //
 
 import SwiftUI
+import Contacts
+import UIKit
 
-struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+// MARK: - Communication Enums
+
+enum CommunicationMethod: String, CaseIterable, Codable {
+    case voiceCall = "Voice Call"
+    case videoCall = "Video Call"
+    case textMessage = "Text Message"
+    
+    var icon: String {
+        switch self {
+        case .voiceCall: return "phone.fill"
+        case .videoCall: return "video.fill"
+        case .textMessage: return "message.fill"
         }
-        .padding()
+    }
+}
+
+enum CommunicationApp: String, CaseIterable, Codable {
+    case phone = "Phone"
+    case whatsapp = "WhatsApp"
+    case telegram = "Telegram"
+    case facetime = "FaceTime"
+    case messages = "Messages"
+    case signal = "Signal"
+    case viber = "Viber"
+    
+    var icon: String {
+        switch self {
+        case .phone: return "phone.fill"
+        case .whatsapp: return "message.fill"
+        case .telegram: return "paperplane.fill"
+        case .facetime: return "video.fill"
+        case .messages: return "message.fill"
+        case .signal: return "message.fill"
+        case .viber: return "message.fill"
+        }
+    }
+    
+    var urlScheme: String {
+        switch self {
+        case .phone: return "tel"
+        case .whatsapp: return "whatsapp"
+        case .telegram: return "tg"
+        case .facetime: return "facetime"
+        case .messages: return "sms"
+        case .signal: return "sgnl"
+        case .viber: return "viber"
+        }
+    }
+    
+    var bundleIdentifier: String {
+        switch self {
+        case .phone: return "com.apple.mobilephone"
+        case .whatsapp: return "net.whatsapp.WhatsApp"
+        case .telegram: return "ph.telegra.Telegraph"
+        case .facetime: return "com.apple.facetime"
+        case .messages: return "com.apple.MobileSMS"
+        case .signal: return "org.whispersystems.signal"
+        case .viber: return "com.viber"
+        }
+    }
+}
+
+/// Main view that displays favorites from the Contacts app
+struct ContentView: View {
+    @StateObject private var contactsManager = ContactsManager()
+    @State private var showingAddToFavorites = false
+    @State private var isEditMode = false
+    
+    var body: some View {
+        NavigationStack {
+            Group {
+                if contactsManager.isLoading {
+                    ProgressView("Loading contacts...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if contactsManager.favorites.isEmpty {
+                    emptyStateView
+                } else {
+                    favoritesListView
+                }
+            }
+            .navigationTitle("Favorites")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if !contactsManager.favorites.isEmpty {
+                        Button(isEditMode ? "Done" : "Edit") {
+                            withAnimation {
+                                isEditMode.toggle()
+                            }
+                        }
+                        .accessibilityLabel(isEditMode ? "Exit edit mode" : "Enter edit mode")
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if isEditMode {
+                        Button {
+                            showingAddToFavorites = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Add to favorites")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddToFavorites) {
+                AddToFavoritesView(contactsManager: contactsManager)
+            }
+        }
+        .onAppear {
+            contactsManager.requestAccess()
+        }
+    }
+    
+    /// View shown when no favorites are available
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "star.circle")
+                .font(.system(size: 80))
+                .foregroundColor(.gray)
+            
+            Text("No Favorites")
+                .font(.title2)
+                .fontWeight(.medium)
+            
+            Text("Add contacts to your favorites for quick access")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Button("Add to Favorites") {
+                showingAddToFavorites = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    /// List view displaying all favorite contacts
+    private var favoritesListView: some View {
+        List {
+            ForEach(contactsManager.favorites) { favorite in
+                FavoriteContactRow(favorite: favorite, isEditMode: isEditMode, contactsManager: contactsManager)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
+            }
+            .onDelete(perform: isEditMode ? deleteFavorites : nil)
+        }
+        .listStyle(.plain)
+        .environment(\.editMode, isEditMode ? .constant(.active) : .constant(.inactive))
+    }
+    
+    /// Deletes favorites at the specified indices
+    private func deleteFavorites(offsets: IndexSet) {
+        contactsManager.removeFavorites(at: offsets)
+    }
+}
+
+/// Row view for displaying a favorite contact
+struct FavoriteContactRow: View {
+    @State private var favorite: FavoriteContact
+    let isEditMode: Bool
+    @ObservedObject var contactsManager: ContactsManager
+    @State private var showingConfig = false
+    
+    init(favorite: FavoriteContact, isEditMode: Bool, contactsManager: ContactsManager) {
+        self._favorite = State(initialValue: favorite)
+        self.isEditMode = isEditMode
+        self.contactsManager = contactsManager
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Contact avatar
+            Circle()
+                .fill(Color.blue.opacity(0.1))
+                .frame(width: 50, height: 50)
+                .overlay {
+                    Text(favorite.contact.givenName.prefix(1).uppercased())
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                }
+            
+            // Contact info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(favorite.displayName)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Text(favorite.phoneNumber)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                // Show communication method and app
+                HStack {
+                    Image(systemName: favorite.communicationMethod.icon)
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                    Text(favorite.communicationMethod.rawValue)
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    
+                    Image(systemName: favorite.communicationApp.icon)
+                        .foregroundColor(.green)
+                        .font(.caption)
+                    Text(favorite.communicationApp.rawValue)
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                
+                // Show if this contact has multiple numbers in favorites
+                if contactsManager.favorites.filter({ $0.contact.identifier == favorite.contact.identifier }).count > 1 {
+                    Text("Multiple numbers available")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            Spacer()
+            
+            // Action button
+            if isEditMode {
+                Button {
+                    showingConfig = true
+                } label: {
+                    Image(systemName: "gear")
+                        .foregroundColor(.gray)
+                        .frame(width: 44, height: 44)
+                        .background(Color.gray.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("Configure \(favorite.displayName)")
+            } else {
+                Button {
+                    initiateCommunication()
+                } label: {
+                    Image(systemName: favorite.communicationMethod.icon)
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.green)
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("\(favorite.communicationMethod.rawValue) \(favorite.displayName)")
+            }
+        }
+        .padding(.vertical, 4)
+        .onTapGesture {
+            if isEditMode {
+                showingConfig = true
+            }
+        }
+        .sheet(isPresented: $showingConfig) {
+            CommunicationConfigView(favorite: $favorite)
+                .onDisappear {
+                    // Update the favorite in the contacts manager
+                    if let index = contactsManager.favorites.firstIndex(where: { $0.id == favorite.id }) {
+                        contactsManager.favorites[index] = favorite
+                        contactsManager.saveFavorites()
+                    }
+                }
+        }
+    }
+    
+    /// Initiates communication based on the selected method and app
+    private func initiateCommunication() {
+        let cleanNumber = favorite.phoneNumber.filter { $0.isNumber }
+        
+        var urlString: String
+        
+        switch (favorite.communicationMethod, favorite.communicationApp) {
+        case (.voiceCall, .phone):
+            urlString = "tel:\(cleanNumber)"
+        case (.videoCall, .phone):
+            urlString = "tel:\(cleanNumber)"
+        case (.textMessage, .messages):
+            urlString = "sms:\(cleanNumber)"
+        case (.voiceCall, .whatsapp):
+            urlString = "whatsapp://send?phone=\(cleanNumber)"
+        case (.videoCall, .whatsapp):
+            urlString = "whatsapp://send?phone=\(cleanNumber)"
+        case (.textMessage, .whatsapp):
+            urlString = "whatsapp://send?phone=\(cleanNumber)"
+        case (.voiceCall, .telegram):
+            urlString = "tg://resolve?domain=\(cleanNumber)"
+        case (.videoCall, .telegram):
+            urlString = "tg://resolve?domain=\(cleanNumber)"
+        case (.textMessage, .telegram):
+            urlString = "tg://resolve?domain=\(cleanNumber)"
+        case (.voiceCall, .facetime):
+            urlString = "facetime:\(cleanNumber)"
+        case (.videoCall, .facetime):
+            urlString = "facetime:\(cleanNumber)"
+        case (.textMessage, .facetime):
+            urlString = "facetime:\(cleanNumber)"
+        case (.voiceCall, .signal):
+            urlString = "sgnl://send?phone=\(cleanNumber)"
+        case (.videoCall, .signal):
+            urlString = "sgnl://send?phone=\(cleanNumber)"
+        case (.textMessage, .signal):
+            urlString = "sgnl://send?phone=\(cleanNumber)"
+        case (.voiceCall, .viber):
+            urlString = "viber://chat?number=\(cleanNumber)"
+        case (.videoCall, .viber):
+            urlString = "viber://chat?number=\(cleanNumber)"
+        case (.textMessage, .viber):
+            urlString = "viber://chat?number=\(cleanNumber)"
+        default:
+            // Fallback to phone call
+            urlString = "tel:\(cleanNumber)"
+        }
+        
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    /// Legacy method for backward compatibility
+    private func callContact(_ phoneNumber: String) {
+        let cleanNumber = phoneNumber.filter { $0.isNumber }
+        if let url = URL(string: "tel:\(cleanNumber)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+/// View for adding contacts to favorites
+struct AddToFavoritesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var contactsManager: ContactsManager
+    @State private var searchText = ""
+    
+    var body: some View {
+        NavigationStack {
+            VStack {
+                if searchText.isEmpty {
+                    Text("Select a contact to add to favorites")
+                        .font(.headline)
+                        .padding()
+                }
+                
+                List(filteredContacts) { contact in
+                    ContactRow(contact: contact, contactsManager: contactsManager)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                }
+                .searchable(text: $searchText, prompt: "Search contacts")
+            }
+            .navigationTitle("Add to Favorites")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Contacts filtered by search text
+    private var filteredContacts: [CNContact] {
+        // First filter to only show valid contacts with names and phone numbers
+        let validContacts = contactsManager.allContacts.filter { contact in
+            let fullName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+            let hasValidName = !fullName.isEmpty && fullName.count > 1
+            let hasPhoneNumber = !contact.phoneNumbers.isEmpty
+            
+            return hasValidName && hasPhoneNumber
+        }
+        
+        if searchText.isEmpty {
+            return validContacts
+        } else {
+            return validContacts.filter { contact in
+                let fullName = "\(contact.givenName) \(contact.familyName)".lowercased()
+                return fullName.contains(searchText.lowercased())
+            }
+        }
+    }
+}
+
+/// Row view for displaying a contact in the add to favorites list
+struct ContactRow: View {
+    let contact: CNContact
+    @ObservedObject var contactsManager: ContactsManager
+    @State private var selectedPhoneNumber: String = ""
+    @State private var showingPhoneSelection = false
+    
+    private var isFavorite: Bool {
+        contactsManager.favorites.contains { $0.contact.identifier == contact.identifier }
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 16) {
+                // Contact avatar
+                Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                    .overlay {
+                        let displayName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                        let initial = displayName.isEmpty ? "?" : displayName.prefix(1).uppercased()
+                        Text(initial)
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                    }
+                
+                // Contact info
+                VStack(alignment: .leading, spacing: 2) {
+                    let displayName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                    Text(displayName.isEmpty ? "Unknown Contact" : displayName)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    if contact.phoneNumbers.count == 1 {
+                        Text(contact.phoneNumbers.first?.value.stringValue ?? "")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("\(contact.phoneNumbers.count) phone numbers")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Add/Remove button
+                Button {
+                    if contact.phoneNumbers.count == 1 {
+                        // Single number - add directly
+                        if let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
+                            contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                        }
+                    } else {
+                        // Multiple numbers - show selection
+                        showingPhoneSelection = true
+                    }
+                } label: {
+                    Image(systemName: "star")
+                        .foregroundColor(.gray)
+                        .font(.title2)
+                }
+                .accessibilityLabel("Add to favorites")
+            }
+            
+            // Show all phone numbers if multiple
+            if contact.phoneNumbers.count > 1 {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(contact.phoneNumbers, id: \.identifier) { phoneNumber in
+                        let phoneString = phoneNumber.value.stringValue
+                        let isAlreadyFavorite = contactsManager.favorites.contains { favorite in
+                            favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
+                        }
+                        
+                        HStack {
+                            Text(phoneString)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 56)
+                            
+                            Spacer()
+                            
+                            Button {
+                                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
+                            } label: {
+                                Image(systemName: isAlreadyFavorite ? "star.fill" : "star")
+                                    .foregroundColor(isAlreadyFavorite ? .yellow : .gray)
+                                    .font(.caption)
+                            }
+                            .disabled(isAlreadyFavorite)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Manager class for handling contacts and favorites
+class ContactsManager: ObservableObject {
+    @Published var favorites: [FavoriteContact] = []
+    @Published var allContacts: [CNContact] = []
+    @Published var isLoading = false
+    
+    private let store = CNContactStore()
+    
+    /// Requests access to contacts and loads them
+    func requestAccess() {
+        store.requestAccess(for: .contacts) { [weak self] granted, error in
+            DispatchQueue.main.async {
+                if granted {
+                    self?.loadContacts()
+                    self?.loadFavorites()
+                } else {
+                    print("Contacts access denied: \(error?.localizedDescription ?? "Unknown error")")
+                }
+            }
+        }
+    }
+    
+    /// Loads all contacts from the device
+    private func loadContacts() {
+        isLoading = true
+        
+        let request = CNContactFetchRequest(keysToFetch: [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor
+        ])
+        
+        var contacts: [CNContact] = []
+        
+        do {
+            try store.enumerateContacts(with: request) { contact, _ in
+                contacts.append(contact)
+            }
+            
+            DispatchQueue.main.async {
+                self.allContacts = contacts.sorted { contact1, contact2 in
+                    let name1 = "\(contact1.givenName) \(contact1.familyName)"
+                    let name2 = "\(contact2.givenName) \(contact2.familyName)"
+                    return name1.localizedCaseInsensitiveCompare(name2) == .orderedAscending
+                }
+                self.isLoading = false
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.isLoading = false
+                print("Error loading contacts: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Loads favorites from UserDefaults
+    private func loadFavorites() {
+        if let data = UserDefaults.standard.data(forKey: "favorites"),
+           let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
+            self.favorites = favorites
+        }
+    }
+    
+    /// Saves favorites to UserDefaults
+    func saveFavorites() {
+        if let data = try? JSONEncoder().encode(favorites) {
+            UserDefaults.standard.set(data, forKey: "favorites")
+        }
+    }
+    
+    /// Adds a contact to favorites with a specific phone number
+    func addToFavorites(contact: CNContact, phoneNumber: String) {
+        let favorite = FavoriteContact(
+            contact: contact,
+            phoneNumber: phoneNumber,
+            displayName: "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+        )
+        
+        // Check if this exact combination (contact + phone number) already exists
+        let alreadyExists = favorites.contains { existingFavorite in
+            existingFavorite.contact.identifier == contact.identifier && existingFavorite.phoneNumber == phoneNumber
+        }
+        
+        if !alreadyExists {
+            favorites.append(favorite)
+            saveFavorites()
+        }
+    }
+    
+    /// Legacy method for backward compatibility
+    func addToFavorites(contact: CNContact) {
+        guard let phoneNumber = contact.phoneNumbers.first?.value.stringValue else { return }
+        addToFavorites(contact: contact, phoneNumber: phoneNumber)
+    }
+    
+    /// Removes a contact from favorites
+    func removeFavorite(contact: CNContact) {
+        favorites.removeAll { $0.contact.identifier == contact.identifier }
+        saveFavorites()
+    }
+    
+    /// Removes a specific contact with specific phone number from favorites
+    func removeFavorite(contact: CNContact, phoneNumber: String) {
+        favorites.removeAll { favorite in
+            favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneNumber
+        }
+        saveFavorites()
+    }
+    
+    /// Removes favorites at specified indices
+    func removeFavorites(at offsets: IndexSet) {
+        favorites.remove(atOffsets: offsets)
+        saveFavorites()
+    }
+}
+
+/// Model for favorite contacts
+struct FavoriteContact: Identifiable, Codable {
+    let id = UUID()
+    let contact: CNContact
+    let phoneNumber: String
+    let displayName: String
+    var communicationMethod: CommunicationMethod
+    var communicationApp: CommunicationApp
+    
+    enum CodingKeys: String, CodingKey {
+        case phoneNumber, displayName, communicationMethod, communicationApp
+    }
+    
+    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp = .phone) {
+        self.contact = contact
+        self.phoneNumber = phoneNumber
+        self.displayName = displayName
+        self.communicationMethod = communicationMethod
+        self.communicationApp = communicationApp
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        phoneNumber = try container.decode(String.self, forKey: .phoneNumber)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        communicationMethod = try container.decodeIfPresent(CommunicationMethod.self, forKey: .communicationMethod) ?? .voiceCall
+        communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phone
+        
+        // Reconstruct contact from stored data
+        let tempContact = CNContact()
+        contact = tempContact
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(phoneNumber, forKey: .phoneNumber)
+        try container.encode(displayName, forKey: .displayName)
+        try container.encode(communicationMethod, forKey: .communicationMethod)
+        try container.encode(communicationApp, forKey: .communicationApp)
+    }
+}
+
+// MARK: - App Detection Utility
+
+class AppDetectionUtility {
+    // Note: For app detection to work properly, you need to add LSApplicationQueriesSchemes to Info.plist
+    // The schemes that need to be added are: whatsapp, tg, telegram, facetime, facetime-audio, sgnl, viber, tel, sms
+    static func isAppInstalled(urlScheme: String) -> Bool {
+        guard let url = URL(string: "\(urlScheme)://") else { 
+            print("❌ Invalid URL scheme: \(urlScheme)")
+            return false 
+        }
+        let canOpen = UIApplication.shared.canOpenURL(url)
+        print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+        return canOpen
+    }
+    
+    static func getInstalledCommunicationApps() -> [CommunicationApp] {
+        print("🚀 Starting app detection...")
+        var installedApps: [CommunicationApp] = []
+        
+        // Always include Phone and Messages as they're built into iOS
+        installedApps.append(.phone)
+        installedApps.append(.messages)
+        print("✅ Added built-in apps: Phone, Messages")
+        
+        // Check for other installed apps
+        let otherApps: [CommunicationApp] = [.whatsapp, .telegram, .facetime, .signal, .viber]
+        
+        for app in otherApps {
+            print("🔍 Checking \(app.rawValue)...")
+            
+            // Try the main URL scheme
+            let isInstalled = isAppInstalled(urlScheme: app.urlScheme)
+            
+            if isInstalled {
+                installedApps.append(app)
+                print("✅ \(app.rawValue) is installed!")
+            } else {
+                print("❌ \(app.rawValue) is not installed")
+            }
+        }
+        
+        let result = installedApps.sorted { $0.rawValue < $1.rawValue }
+        print("🎯 Final result: \(result.map { $0.rawValue })")
+        return result
+    }
+    
+    static func debugAllSchemes() -> [String: Bool] {
+        var results: [String: Bool] = [:]
+        
+        let allSchemes = [
+            "whatsapp", "tg", "telegram", "facetime", "facetime-audio", 
+            "sgnl", "viber", "tel", "sms"
+        ]
+        
+        for scheme in allSchemes {
+            results[scheme] = isAppInstalled(urlScheme: scheme)
+        }
+        
+        return results
+    }
+}
+
+// MARK: - Communication Configuration View
+
+struct CommunicationConfigView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var favorite: FavoriteContact
+    @State private var selectedMethod: CommunicationMethod
+    @State private var selectedApp: CommunicationApp
+    @State private var availableApps: [CommunicationApp] = []
+    
+    init(favorite: Binding<FavoriteContact>) {
+        self._favorite = favorite
+        self._selectedMethod = State(initialValue: favorite.wrappedValue.communicationMethod)
+        self._selectedApp = State(initialValue: favorite.wrappedValue.communicationApp)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Communication Method") {
+                    Picker("Method", selection: $selectedMethod) {
+                        ForEach(CommunicationMethod.allCases, id: \.self) { method in
+                            HStack {
+                                Image(systemName: method.icon)
+                                    .foregroundColor(.blue)
+                                Text(method.rawValue)
+                            }
+                            .tag(method)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                Section("Communication App") {
+                    if availableApps.isEmpty {
+                        Text("No compatible apps found")
+                            .foregroundColor(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Choose your preferred app:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("App", selection: $selectedApp) {
+                                ForEach(availableApps, id: \.self) { app in
+                                    HStack {
+                                        Image(systemName: app.icon)
+                                            .foregroundColor(.green)
+                                            .frame(width: 20)
+                                        Text(app.rawValue)
+                                        Spacer()
+                                    }
+                                    .tag(app)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        
+                        // Show available apps count
+                        Text("\(availableApps.count) app\(availableApps.count == 1 ? "" : "s") available")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                    }
+                }
+                
+                Section("Available Communication Apps") {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(CommunicationApp.allCases, id: \.self) { app in
+                            HStack {
+                                Image(systemName: app.icon)
+                                    .foregroundColor(availableApps.contains(app) ? .green : .gray)
+                                    .frame(width: 20)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.rawValue)
+                                        .foregroundColor(availableApps.contains(app) ? .primary : .secondary)
+                                    
+                                    // Debug info
+                                    Text("Scheme: \(app.urlScheme)://")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                if availableApps.contains(app) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.caption)
+                                } else {
+                                    Text("Not Installed")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+                
+                Section("Debug Info") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Detection Results:")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        
+                        ForEach(CommunicationApp.allCases, id: \.self) { app in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.rawValue)
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                    
+                                    Text("Scheme: \(app.urlScheme)://")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Text(AppDetectionUtility.isAppInstalled(urlScheme: app.urlScheme) ? "✅" : "❌")
+                                    .font(.caption)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("All URL Schemes Test:")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                            
+                            let debugResults = AppDetectionUtility.debugAllSchemes()
+                            ForEach(Array(debugResults.keys.sorted()), id: \.self) { scheme in
+                                HStack {
+                                    Text("\(scheme)://")
+                                        .font(.caption2)
+                                        .monospaced()
+                                    
+                                    Spacer()
+                                    
+                                    Text(debugResults[scheme] == true ? "✅" : "❌")
+                                        .font(.caption2)
+                                }
+                            }
+                        }
+                        
+                        Button("Refresh Detection") {
+                            loadAvailableApps()
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.top, 4)
+                    }
+                }
+                
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preview:")
+                            .font(.headline)
+                        
+                        HStack {
+                            Image(systemName: selectedMethod.icon)
+                                .foregroundColor(.blue)
+                            Text(selectedMethod.rawValue)
+                            Spacer()
+                            Image(systemName: selectedApp.icon)
+                                .foregroundColor(.green)
+                            Text(selectedApp.rawValue)
+                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+            .navigationTitle("Configure Communication")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        favorite.communicationMethod = selectedMethod
+                        favorite.communicationApp = selectedApp
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .onAppear {
+            loadAvailableApps()
+        }
+    }
+    
+    private func loadAvailableApps() {
+        availableApps = AppDetectionUtility.getInstalledCommunicationApps()
+        
+        // Ensure selected app is available, otherwise select first available
+        if !availableApps.contains(selectedApp) {
+            selectedApp = availableApps.first ?? .phone
+        }
     }
 }
 
