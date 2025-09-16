@@ -394,8 +394,6 @@ struct AddToFavoritesView: View {
 struct ContactRow: View {
     let contact: CNContact
     @ObservedObject var contactsManager: ContactsManager
-    @State private var selectedPhoneNumber: String = ""
-    @State private var showingPhoneSelection = false
     
     private var isFavorite: Bool {
         contactsManager.favorites.contains { $0.contact.identifier == contact.identifier }
@@ -443,21 +441,25 @@ struct ContactRow: View {
                         if let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
                             contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
                         }
-                    } else {
-                        // Multiple numbers - show selection
-                        showingPhoneSelection = true
                     }
+                    // For multiple numbers, users must select individual numbers below
                 } label: {
-                    Image(systemName: "star")
+                    Image(systemName: contact.phoneNumbers.count == 1 ? "star" : "star.circle")
                         .foregroundColor(.gray)
                         .font(.title2)
                 }
-                .accessibilityLabel("Add to favorites")
+                .accessibilityLabel(contact.phoneNumbers.count == 1 ? "Add to favorites" : "Select individual numbers below")
+                .disabled(contact.phoneNumbers.count > 1)
             }
             
             // Show all phone numbers if multiple
             if contact.phoneNumbers.count > 1 {
                 VStack(alignment: .leading, spacing: 4) {
+                    Text("Select which number to add:")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.leading, 56)
+                    
                     ForEach(contact.phoneNumbers, id: \.identifier) { phoneNumber in
                         let phoneString = phoneNumber.value.stringValue
                         let isAlreadyFavorite = contactsManager.favorites.contains { favorite in
