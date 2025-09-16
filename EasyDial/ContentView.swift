@@ -454,11 +454,12 @@ struct ContactRow: View {
             
             // Show all phone numbers if multiple
             if contact.phoneNumbers.count > 1 {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Select which number to add:")
                         .font(.caption)
                         .foregroundColor(.blue)
                         .padding(.leading, 56)
+                        .padding(.bottom, 4)
                     
                     ForEach(contact.phoneNumbers, id: \.identifier) { phoneNumber in
                         let phoneString = phoneNumber.value.stringValue
@@ -468,7 +469,7 @@ struct ContactRow: View {
                         
                         HStack {
                             Text(phoneString)
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .padding(.leading, 56)
                             
@@ -479,13 +480,17 @@ struct ContactRow: View {
                             } label: {
                                 Image(systemName: isAlreadyFavorite ? "star.fill" : "star")
                                     .foregroundColor(isAlreadyFavorite ? .yellow : .gray)
-                                    .font(.caption)
+                                    .font(.title3)
                             }
                             .disabled(isAlreadyFavorite)
                         }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(8)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 8)
             }
         }
         .padding(.vertical, 4)
