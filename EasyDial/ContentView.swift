@@ -360,7 +360,7 @@ struct AddToFavoritesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                 }
