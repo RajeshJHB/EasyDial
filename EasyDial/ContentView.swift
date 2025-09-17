@@ -455,45 +455,98 @@ struct ContactRow: View {
             // Show all phone numbers if multiple
             if contact.phoneNumbers.count > 1 {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Select which number to add:")
+                    Text("Tap stars to add/remove numbers:")
                         .font(.caption)
                         .foregroundColor(.blue)
                         .padding(.leading, 56)
                         .padding(.bottom, 4)
                     
                     ForEach(contact.phoneNumbers, id: \.identifier) { phoneNumber in
-                        let phoneString = phoneNumber.value.stringValue
-                        let isAlreadyFavorite = contactsManager.favorites.contains { favorite in
-                            favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
-                        }
-                        
-                        HStack {
-                            Text(phoneString)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .padding(.leading, 56)
-                            
-                            Spacer()
-                            
-                            Button {
-                                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
-                            } label: {
-                                Image(systemName: isAlreadyFavorite ? "star.fill" : "star")
-                                    .foregroundColor(isAlreadyFavorite ? .yellow : .gray)
-                                    .font(.title3)
-                            }
-                            .disabled(isAlreadyFavorite)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 4)
-                        .background(Color.gray.opacity(0.05))
-                        .cornerRadius(8)
+                        PhoneNumberRow(
+                            contact: contact,
+                            phoneNumber: phoneNumber,
+                            contactsManager: contactsManager
+                        )
+                        .id("\(contact.identifier)_\(phoneNumber.identifier)")
                     }
                 }
                 .padding(.top, 8)
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Row view for individual phone number selection
+struct PhoneNumberRow: View {
+    let contact: CNContact
+    let phoneNumber: CNLabeledValue<CNPhoneNumber>
+    @ObservedObject var contactsManager: ContactsManager
+    @State private var isSelected: Bool = false
+    
+    private var phoneString: String {
+        phoneNumber.value.stringValue
+    }
+    
+    private var uniqueKey: String {
+        "\(contact.identifier)_\(phoneString)"
+    }
+    
+    var body: some View {
+        HStack {
+            Text(phoneString)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.leading, 56)
+            
+            Spacer()
+            
+            Button(action: {
+                print("🔍 TAPPING STAR for phone: \(phoneString)")
+                print("🔍 Contact ID: \(contact.identifier)")
+                print("🔍 Current isSelected: \(isSelected)")
+                print("🔍 All phone numbers for this contact:")
+                for (index, phone) in contact.phoneNumbers.enumerated() {
+                    print("🔍   \(index): \(phone.value.stringValue)")
+                }
+                
+                if isSelected {
+                    print("🗑️ REMOVING from favorites")
+                    contactsManager.removeFavorite(contact: contact, phoneNumber: phoneString)
+                    isSelected = false
+                } else {
+                    print("➕ ADDING to favorites")
+                    contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
+                    isSelected = true
+                }
+                
+                print("🔍 After action - isSelected: \(isSelected)")
+                print("🔍 Total favorites count: \(contactsManager.favorites.count)")
+            }) {
+                Image(systemName: isSelected ? "star.fill" : "star")
+                    .foregroundColor(isSelected ? .yellow : .gray)
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
+        .onAppear {
+            // Initialize the local state based on current favorites
+            isSelected = contactsManager.favorites.contains { favorite in
+                favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
+            }
+        }
+        .onChange(of: contactsManager.favorites) { newFavorites in
+            // Update local state when favorites change
+            isSelected = newFavorites.contains { favorite in
+                favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
+            }
+        }
     }
 }
 
@@ -569,6 +622,12 @@ class ContactsManager: ObservableObject {
     
     /// Adds a contact to favorites with a specific phone number
     func addToFavorites(contact: CNContact, phoneNumber: String) {
+        print("📞 addToFavorites CALLED")
+        print("📞 Contact ID: \(contact.identifier)")
+        print("📞 Phone Number: \(phoneNumber)")
+        print("📞 Contact has \(contact.phoneNumbers.count) phone numbers")
+        print("📞 Current favorites count: \(favorites.count)")
+        
         let favorite = FavoriteContact(
             contact: contact,
             phoneNumber: phoneNumber,
@@ -580,9 +639,15 @@ class ContactsManager: ObservableObject {
             existingFavorite.contact.identifier == contact.identifier && existingFavorite.phoneNumber == phoneNumber
         }
         
+        print("📞 Already exists: \(alreadyExists)")
+        
         if !alreadyExists {
+            print("📞 Adding new favorite")
             favorites.append(favorite)
             saveFavorites()
+            print("📞 New favorites count: \(favorites.count)")
+        } else {
+            print("📞 Skipping - already exists")
         }
     }
     
@@ -614,7 +679,7 @@ class ContactsManager: ObservableObject {
 }
 
 /// Model for favorite contacts
-struct FavoriteContact: Identifiable, Codable {
+struct FavoriteContact: Identifiable, Codable, Equatable {
     let id = UUID()
     let contact: CNContact
     let phoneNumber: String
@@ -652,6 +717,15 @@ struct FavoriteContact: Identifiable, Codable {
         try container.encode(displayName, forKey: .displayName)
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
+    }
+    
+    // MARK: - Equatable
+    static func == (lhs: FavoriteContact, rhs: FavoriteContact) -> Bool {
+        return lhs.contact.identifier == rhs.contact.identifier &&
+               lhs.phoneNumber == rhs.phoneNumber &&
+               lhs.displayName == rhs.displayName &&
+               lhs.communicationMethod == rhs.communicationMethod &&
+               lhs.communicationApp == rhs.communicationApp
     }
 }
 
