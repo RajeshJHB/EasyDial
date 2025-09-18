@@ -283,7 +283,7 @@ struct FavoriteContactRow: View {
         case (.voiceCall, .phone):
             urlString = "tel:\(cleanNumber)"
         case (.videoCall, .phone):
-            urlString = "tel:\(cleanNumber)"
+            urlString = "facetime:\(cleanNumber)"
         case (.textMessage, .messages):
             urlString = "sms:\(cleanNumber)"
         case (.voiceCall, .whatsapp):
@@ -303,7 +303,7 @@ struct FavoriteContactRow: View {
         case (.videoCall, .facetime):
             urlString = "facetime:\(cleanNumber)"
         case (.textMessage, .facetime):
-            urlString = "facetime:\(cleanNumber)"
+            urlString = "sms:\(cleanNumber)"
         case (.voiceCall, .signal):
             urlString = "sgnl://send?phone=\(cleanNumber)"
         case (.videoCall, .signal):
@@ -322,7 +322,9 @@ struct FavoriteContactRow: View {
         }
         
         if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
         }
     }
     
@@ -330,7 +332,9 @@ struct FavoriteContactRow: View {
     private func callContact(_ phoneNumber: String) {
         let cleanNumber = phoneNumber.filter { $0.isNumber }
         if let url = URL(string: "tel:\(cleanNumber)") {
-            UIApplication.shared.open(url)
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
         }
     }
 }
@@ -437,18 +441,22 @@ struct ContactRow: View {
                 // Add/Remove button
                 Button {
                     if contact.phoneNumbers.count == 1 {
-                        // Single number - add directly
+                        // Single number - add/remove directly
                         if let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
-                            contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                            if isFavorite {
+                                contactsManager.removeFavorite(contact: contact, phoneNumber: phoneNumber)
+                            } else {
+                                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                            }
                         }
                     }
                     // For multiple numbers, users must select individual numbers below
                 } label: {
-                    Image(systemName: contact.phoneNumbers.count == 1 ? "star" : "star.circle")
-                        .foregroundColor(.gray)
+                    Image(systemName: contact.phoneNumbers.count == 1 ? (isFavorite ? "star.fill" : "star") : "star.circle")
+                        .foregroundColor(contact.phoneNumbers.count == 1 ? (isFavorite ? .yellow : .gray) : .gray)
                         .font(.title2)
                 }
-                .accessibilityLabel(contact.phoneNumbers.count == 1 ? "Add to favorites" : "Select individual numbers below")
+                .accessibilityLabel(contact.phoneNumbers.count == 1 ? (isFavorite ? "Remove from favorites" : "Add to favorites") : "Select individual numbers below")
                 .disabled(contact.phoneNumbers.count > 1)
             }
             
@@ -739,8 +747,18 @@ class AppDetectionUtility {
             print("❌ Invalid URL scheme: \(urlScheme)")
             return false 
         }
-        let canOpen = UIApplication.shared.canOpenURL(url)
-        print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+        
+        // Use DispatchQueue to ensure this runs on the main thread
+        var canOpen = false
+        let semaphore = DispatchSemaphore(value: 0)
+        
+        DispatchQueue.main.async {
+            canOpen = UIApplication.shared.canOpenURL(url)
+            print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+            semaphore.signal()
+        }
+        
+        semaphore.wait()
         return canOpen
     }
     
