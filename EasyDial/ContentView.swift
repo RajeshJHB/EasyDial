@@ -275,53 +275,80 @@ struct FavoriteContactRow: View {
     
     /// Initiates communication based on the selected method and app
     private func initiateCommunication() {
-        let cleanNumber = favorite.phoneNumber.filter { $0.isNumber }
+        // Clean the phone number for tel: and facetime: schemes - keep only digits, +, and -
+        let cleanPhoneNumber = favorite.phoneNumber.replacingOccurrences(of: " ", with: "")
+                                                   .replacingOccurrences(of: "(", with: "")
+                                                   .replacingOccurrences(of: ")", with: "")
+                                                   .replacingOccurrences(of: "-", with: "")
+                                                   .replacingOccurrences(of: ".", with: "")
+        
+        // Remove the '+' sign from the phone number for URL schemes
+        let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
         
         var urlString: String
         
+        // Debug logging
+        print("🔍 Communication Debug:")
+        print("🔍 Method: \(favorite.communicationMethod.rawValue)")
+        print("🔍 App: \(favorite.communicationApp.rawValue)")
+        print("🔍 Original Phone: \(favorite.phoneNumber)")
+        print("🔍 Cleaned Phone: \(phoneNumber)")
+        
         switch (favorite.communicationMethod, favorite.communicationApp) {
         case (.voiceCall, .phone):
-            urlString = "tel:\(cleanNumber)"
+            urlString = "tel:\(favorite.phoneNumber)" // Use original format to avoid prompts
+            print("🔍 Matched: Voice Call + Phone = TEL (original format)")
         case (.videoCall, .phone):
-            urlString = "facetime:\(cleanNumber)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .messages):
-            urlString = "sms:\(cleanNumber)"
-        case (.voiceCall, .whatsapp):
-            urlString = "whatsapp://send?phone=\(cleanNumber)"
+            urlString = "sms:\(phoneNumber)"
+            print("🔍 Matched: Text Message + Messages = SMS")
+            case (.voiceCall, .whatsapp):
+                urlString = "x-safari-https://whatsapp://send?phone=\(phoneNumber)"
+             // urlString = "x-safari-https://whatsapp://send?phone=\(phoneNumber)"
+
         case (.videoCall, .whatsapp):
-            urlString = "whatsapp://send?phone=\(cleanNumber)"
+            urlString = "whatsapp://send?phone=\(phoneNumber)"
         case (.textMessage, .whatsapp):
-            urlString = "whatsapp://send?phone=\(cleanNumber)"
+            urlString = "whatsapp://send?phone=\(phoneNumber)"
         case (.voiceCall, .telegram):
-            urlString = "tg://resolve?domain=\(cleanNumber)"
+            urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.videoCall, .telegram):
-            urlString = "tg://resolve?domain=\(cleanNumber)"
+            urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.textMessage, .telegram):
-            urlString = "tg://resolve?domain=\(cleanNumber)"
+            urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime:\(cleanNumber)"
+            urlString = "facetime:\(phoneNumber)"
         case (.videoCall, .facetime):
-            urlString = "facetime:\(cleanNumber)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .facetime):
-            urlString = "sms:\(cleanNumber)"
+            urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .signal):
-            urlString = "sgnl://send?phone=\(cleanNumber)"
+            urlString = "sgnl://send?phone=\(phoneNumber)"
         case (.videoCall, .signal):
-            urlString = "sgnl://send?phone=\(cleanNumber)"
+            urlString = "sgnl://send?phone=\(phoneNumber)"
         case (.textMessage, .signal):
-            urlString = "sgnl://send?phone=\(cleanNumber)"
+            urlString = "sgnl://send?phone=\(phoneNumber)"
         case (.voiceCall, .viber):
-            urlString = "viber://chat?number=\(cleanNumber)"
+            urlString = "viber://chat?number=\(phoneNumber)"
         case (.videoCall, .viber):
-            urlString = "viber://chat?number=\(cleanNumber)"
+            urlString = "viber://chat?number=\(phoneNumber)"
         case (.textMessage, .viber):
-            urlString = "viber://chat?number=\(cleanNumber)"
+            urlString = "viber://chat?number=\(phoneNumber)"
+        case (.textMessage, .phone):
+            // Handle legacy contacts that have Text Message + Phone (invalid combination)
+            urlString = "sms:\(phoneNumber)"
+            print("🔍 Matched: Text Message + Phone (legacy) = SMS")
         default:
             // Fallback to phone call
-            urlString = "tel:\(cleanNumber)"
+            urlString = "tel:\(phoneNumber)"
+            print("🔍 Matched: DEFAULT case - Phone call fallback")
         }
         
+        print("🔍 Final URL: \(urlString)")
+        
         if let url = URL(string: urlString) {
+            print("🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
@@ -330,8 +357,8 @@ struct FavoriteContactRow: View {
     
     /// Legacy method for backward compatibility
     private func callContact(_ phoneNumber: String) {
-        let cleanNumber = phoneNumber.filter { $0.isNumber }
-        if let url = URL(string: "tel:\(cleanNumber)") {
+        let phoneNumber = phoneNumber.filter { $0.isNumber }
+        if let url = URL(string: "tel:\(phoneNumber)") {
             DispatchQueue.main.async {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
@@ -699,12 +726,25 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         case phoneNumber, displayName, communicationMethod, communicationApp
     }
     
-    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp = .phone) {
+    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil) {
         self.contact = contact
         self.phoneNumber = phoneNumber
         self.displayName = displayName
         self.communicationMethod = communicationMethod
-        self.communicationApp = communicationApp
+        
+        // Set appropriate default app based on communication method
+        if let app = communicationApp {
+            self.communicationApp = app
+        } else {
+            switch communicationMethod {
+            case .voiceCall:
+                self.communicationApp = .phone
+            case .videoCall:
+                self.communicationApp = .phone
+            case .textMessage:
+                self.communicationApp = .messages
+            }
+        }
     }
     
     init(from decoder: Decoder) throws {
@@ -748,18 +788,20 @@ class AppDetectionUtility {
             return false 
         }
         
-        // Use DispatchQueue to ensure this runs on the main thread
-        var canOpen = false
-        let semaphore = DispatchSemaphore(value: 0)
-        
-        DispatchQueue.main.async {
-            canOpen = UIApplication.shared.canOpenURL(url)
+        // Check if we're already on the main thread
+        if Thread.isMainThread {
+            let canOpen = UIApplication.shared.canOpenURL(url)
             print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
-            semaphore.signal()
+            return canOpen
+        } else {
+            // If not on main thread, dispatch to main thread synchronously
+            var canOpen = false
+            DispatchQueue.main.sync {
+                canOpen = UIApplication.shared.canOpenURL(url)
+                print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+            }
+            return canOpen
         }
-        
-        semaphore.wait()
-        return canOpen
     }
     
     static func getInstalledCommunicationApps() -> [CommunicationApp] {
