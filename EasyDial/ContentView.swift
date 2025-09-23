@@ -188,16 +188,8 @@ struct FavoriteContactRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Contact avatar
-            Circle()
-                .fill(Color.blue.opacity(0.1))
-                .frame(width: 50, height: 50)
-                .overlay {
-                    Text(favorite.contact.givenName.prefix(1).uppercased())
-                        .font(.title2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                }
+            // Contact photo
+            ContactPhotoView(contact: favorite.contact, size: 50)
             
             // Contact info
             VStack(alignment: .leading, spacing: 4) {
@@ -439,17 +431,8 @@ struct ContactRow: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 16) {
-                // Contact avatar
-                Circle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 40, height: 40)
-                    .overlay {
-                        let displayName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
-                        let initial = displayName.isEmpty ? "?" : displayName.prefix(1).uppercased()
-                        Text(initial)
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                    }
+                // Contact photo
+                ContactPhotoView(contact: contact, size: 40)
                 
                 // Contact info
                 VStack(alignment: .leading, spacing: 2) {
@@ -591,6 +574,40 @@ struct PhoneNumberRow: View {
     }
 }
 
+/// Reusable view for displaying contact photos with fallback to initials
+struct ContactPhotoView: View {
+    let contact: CNContact
+    let size: CGFloat
+    
+    init(contact: CNContact, size: CGFloat = 50) {
+        self.contact = contact
+        self.size = size
+    }
+    
+    var body: some View {
+        Group {
+            if let imageData = contact.thumbnailImageData ?? contact.imageData,
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                // Fallback to initials
+                Circle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: size, height: size)
+                    .overlay {
+                        Text(contact.givenName.prefix(1).uppercased())
+                            .font(.system(size: size * 0.4, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+            }
+        }
+    }
+}
+
 /// Manager class for handling contacts and favorites
 class ContactsManager: ObservableObject {
     @Published var favorites: [FavoriteContact] = []
@@ -620,7 +637,9 @@ class ContactsManager: ObservableObject {
         let request = CNContactFetchRequest(keysToFetch: [
             CNContactGivenNameKey as CNKeyDescriptor,
             CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactImageDataKey as CNKeyDescriptor,
+            CNContactThumbnailImageDataKey as CNKeyDescriptor
         ])
         
         var contacts: [CNContact] = []
