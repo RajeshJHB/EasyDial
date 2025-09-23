@@ -156,6 +156,7 @@ struct ContentView: View {
                     .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
             }
             .onDelete(perform: isEditMode ? deleteFavorites : nil)
+            .onMove(perform: isEditMode ? moveFavorites : nil)
         }
         .listStyle(.plain)
         .environment(\.editMode, isEditMode ? .constant(.active) : .constant(.inactive))
@@ -164,6 +165,11 @@ struct ContentView: View {
     /// Deletes favorites at the specified indices
     private func deleteFavorites(offsets: IndexSet) {
         contactsManager.removeFavorites(at: offsets)
+    }
+    
+    /// Moves favorites from source indices to destination index
+    private func moveFavorites(from source: IndexSet, to destination: Int) {
+        contactsManager.moveFavorites(from: source, to: destination)
     }
 }
 
@@ -709,6 +715,12 @@ class ContactsManager: ObservableObject {
     /// Removes favorites at specified indices
     func removeFavorites(at offsets: IndexSet) {
         favorites.remove(atOffsets: offsets)
+        saveFavorites()
+    }
+    
+    /// Moves favorites from source indices to destination index
+    func moveFavorites(from source: IndexSet, to destination: Int) {
+        favorites.move(fromOffsets: source, toOffset: destination)
         saveFavorites()
     }
 }
