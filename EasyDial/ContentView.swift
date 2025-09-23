@@ -304,7 +304,7 @@ struct FavoriteContactRow: View {
             urlString = "sms:\(phoneNumber)"
             print("🔍 Matched: Text Message + Messages = SMS")
             case (.voiceCall, .whatsapp):
-                urlString = "x-safari-https://whatsapp://send?phone=\(phoneNumber)"
+                urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
              // urlString = "x-safari-https://whatsapp://send?phone=\(phoneNumber)"
 
         case (.videoCall, .whatsapp):
@@ -318,7 +318,7 @@ struct FavoriteContactRow: View {
         case (.textMessage, .telegram):
             urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime:\(phoneNumber)"
+            urlString = "facetime-audio:\(phoneNumber)"
         case (.videoCall, .facetime):
             urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .facetime):
