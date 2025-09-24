@@ -465,10 +465,7 @@ struct AddToFavoritesView: View {
 struct ContactRow: View {
     let contact: CNContact
     @ObservedObject var contactsManager: ContactsManager
-    
-    private var isFavorite: Bool {
-        contactsManager.favorites.contains { $0.contactIdentifier == contact.identifier }
-    }
+    @State private var isSelected: Bool = false
     
     var body: some View {
         VStack(spacing: 8) {
@@ -496,25 +493,22 @@ struct ContactRow: View {
                 
                 Spacer()
                 
-                // Add/Remove button
+                // Add button
                 Button {
                     if contact.phoneNumbers.count == 1 {
-                        // Single number - add/remove directly
+                        // Single number - add directly
                         if let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
-                            if isFavorite {
-                                contactsManager.removeFavorite(contact: contact, phoneNumber: phoneNumber)
-                            } else {
-                                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
-                            }
+                            contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                            isSelected = true
                         }
                     }
                     // For multiple numbers, users must select individual numbers below
                 } label: {
-                    Image(systemName: contact.phoneNumbers.count == 1 ? (isFavorite ? "star.fill" : "star") : "star.circle")
-                        .foregroundColor(contact.phoneNumbers.count == 1 ? (isFavorite ? .yellow : .gray) : .gray)
+                    Image(systemName: contact.phoneNumbers.count == 1 ? (isSelected ? "star.fill" : "star") : "star.circle")
+                        .foregroundColor(contact.phoneNumbers.count == 1 ? (isSelected ? .yellow : .gray) : .gray)
                         .font(.title2)
                 }
-                .accessibilityLabel(contact.phoneNumbers.count == 1 ? (isFavorite ? "Remove from favorites" : "Add to favorites") : "Select individual numbers below")
+                .accessibilityLabel(contact.phoneNumbers.count == 1 ? "Add to favorites" : "Select individual numbers below")
                 .disabled(contact.phoneNumbers.count > 1)
             }
             
@@ -554,10 +548,6 @@ struct PhoneNumberRow: View {
         phoneNumber.value.stringValue
     }
     
-    private var uniqueKey: String {
-        "\(contact.identifier)_\(phoneString)"
-    }
-    
     var body: some View {
         HStack {
             Text(phoneString)
@@ -568,13 +558,8 @@ struct PhoneNumberRow: View {
             Spacer()
             
             Button(action: {
-                if isSelected {
-                    contactsManager.removeFavorite(contact: contact, phoneNumber: phoneString)
-                    isSelected = false
-                } else {
-                    contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
-                    isSelected = true
-                }
+                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
+                isSelected = true
             }) {
                 Image(systemName: isSelected ? "star.fill" : "star")
                     .foregroundColor(isSelected ? .yellow : .gray)
@@ -588,18 +573,6 @@ struct PhoneNumberRow: View {
         .padding(.horizontal, 4)
         .background(Color.gray.opacity(0.05))
         .cornerRadius(8)
-        .onAppear {
-            // Initialize the local state based on current favorites
-            isSelected = contactsManager.favorites.contains { favorite in
-                favorite.contactIdentifier == contact.identifier && favorite.phoneNumber == phoneString
-            }
-        }
-        .onChange(of: contactsManager.favorites) { _, newFavorites in
-            // Update local state when favorites change
-            isSelected = newFavorites.contains { favorite in
-                favorite.contactIdentifier == contact.identifier && favorite.phoneNumber == phoneString
-            }
-        }
     }
 }
 
@@ -744,15 +717,9 @@ class ContactsManager: ObservableObject {
             displayName: "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
         )
         
-        // Check if this exact combination (contact + phone number) already exists
-        let alreadyExists = favorites.contains { existingFavorite in
-            existingFavorite.contactIdentifier == contact.identifier && existingFavorite.phoneNumber == phoneNumber
-        }
-        
-        if !alreadyExists {
-            favorites.append(favorite)
-            saveFavorites()
-        }
+        // Always add the favorite (allow duplicates)
+        favorites.append(favorite)
+        saveFavorites()
     }
     
     /// Legacy method for backward compatibility
@@ -1238,6 +1205,7 @@ struct ContactDetailView: View {
                 .allowsHitTesting(true)
             }
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("\(currentIndex + 1) of \(contactsManager.favorites.count)")
