@@ -156,7 +156,7 @@ struct ContentView: View {
             .sheet(isPresented: $showingAddToFavorites) {
                 AddToFavoritesView(contactsManager: contactsManager)
             }
-            .sheet(isPresented: $showingContactDetail) {
+            .fullScreenCover(isPresented: $showingContactDetail) {
                 if currentContactIndex < contactsManager.favorites.count {
                     ContactDetailView(
                         favorite: Binding(
@@ -222,7 +222,7 @@ struct ContentView: View {
         contactsManager.moveFavorites(from: source, to: destination)
     }
     
-    /// Navigates to the previous contact
+    /// Navigates to the previous contact (circular)
     private func navigateToPreviousContact() {
         if contactsManager.favorites.count > 0 {
             currentContactIndex = (currentContactIndex - 1 + contactsManager.favorites.count) % contactsManager.favorites.count
@@ -231,7 +231,7 @@ struct ContentView: View {
         }
     }
     
-    /// Navigates to the next contact
+    /// Navigates to the next contact (circular)
     private func navigateToNextContact() {
         if contactsManager.favorites.count > 0 {
             currentContactIndex = (currentContactIndex + 1) % contactsManager.favorites.count
