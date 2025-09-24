@@ -124,21 +124,19 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        HStack(spacing: 30) {
-                            Button("←") {
-                                navigateToPreviousContact()
-                            }
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.blue)
-                            .disabled(contactsManager.favorites.isEmpty)
-                            
-                            Button("→") {
-                                navigateToNextContact()
-                            }
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.blue)
-                            .disabled(contactsManager.favorites.isEmpty)
+                        NavigationLink(destination: ContactDetailView(
+                            favorite: Binding(
+                                get: { contactsManager.favorites[0] },
+                                set: { _ in }
+                            ),
+                            contactsManager: contactsManager
+                        )) {
+                            Text("Easy Dial")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.blue)
                         }
+                        .disabled(contactsManager.favorites.isEmpty)
                     }
                 }
                 
@@ -220,24 +218,6 @@ struct ContentView: View {
     /// Moves favorites from source indices to destination index
     private func moveFavorites(from source: IndexSet, to destination: Int) {
         contactsManager.moveFavorites(from: source, to: destination)
-    }
-    
-    /// Navigates to the previous contact (circular)
-    private func navigateToPreviousContact() {
-        if contactsManager.favorites.count > 0 {
-            currentContactIndex = (currentContactIndex - 1 + contactsManager.favorites.count) % contactsManager.favorites.count
-            showingContactDetail = true
-            print("🔍 Navigated to previous contact: \(contactsManager.favorites[currentContactIndex].displayName) (index: \(currentContactIndex))")
-        }
-    }
-    
-    /// Navigates to the next contact (circular)
-    private func navigateToNextContact() {
-        if contactsManager.favorites.count > 0 {
-            currentContactIndex = (currentContactIndex + 1) % contactsManager.favorites.count
-            showingContactDetail = true
-            print("🔍 Navigated to next contact: \(contactsManager.favorites[currentContactIndex].displayName) (index: \(currentContactIndex))")
-        }
     }
 }
 
@@ -1207,12 +1187,6 @@ struct ContactDetailView: View {
                 }
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-            .onChange(of: currentIndex) { oldValue, newValue in
-                print("🔍 TabView currentIndex changed from \(oldValue) to \(newValue)")
-                if newValue < contactsManager.favorites.count {
-                    print("🔍 Now showing: \(contactsManager.favorites[newValue].displayName)")
-                }
-            }
             // Large tap panels at the top-left and top-right for navigation
             .overlay(alignment: .top) {
                 HStack {
@@ -1285,7 +1259,7 @@ struct ContactDetailPage: View {
         self._favorite = favorite
         self.contactsManager = contactsManager
         self.onHomeTapped = onHomeTapped
-        print("🔍 ContactDetailPage init for: \(favorite.wrappedValue.displayName)")
+   //     print("🔍 ContactDetailPage init for: \(favorite.wrappedValue.displayName)")
     }
     
     var body: some View {
