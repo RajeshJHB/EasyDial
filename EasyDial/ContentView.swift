@@ -8,6 +8,7 @@
 import SwiftUI
 import Contacts
 import UIKit
+import PhotosUI
 
 // MARK: - Communication Enums
 
@@ -151,8 +152,8 @@ struct ContentView: View {
     /// List view displaying all favorite contacts
     private var favoritesListView: some View {
         List {
-            ForEach(contactsManager.favorites) { favorite in
-                FavoriteContactRow(favorite: favorite, isEditMode: isEditMode, contactsManager: contactsManager)
+            ForEach($contactsManager.favorites) { $favorite in
+                FavoriteContactRow(favorite: $favorite, isEditMode: isEditMode, contactsManager: contactsManager)
                     .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
             }
             .onDelete(perform: isEditMode ? deleteFavorites : nil)
@@ -175,21 +176,21 @@ struct ContentView: View {
 
 /// Row view for displaying a favorite contact
 struct FavoriteContactRow: View {
-    @State private var favorite: FavoriteContact
+    @Binding var favorite: FavoriteContact
     let isEditMode: Bool
     @ObservedObject var contactsManager: ContactsManager
     @State private var showingConfig = false
     
-    init(favorite: FavoriteContact, isEditMode: Bool, contactsManager: ContactsManager) {
-        self._favorite = State(initialValue: favorite)
+    init(favorite: Binding<FavoriteContact>, isEditMode: Bool, contactsManager: ContactsManager) {
+        self._favorite = favorite
         self.isEditMode = isEditMode
         self.contactsManager = contactsManager
     }
     
     var body: some View {
         HStack(spacing: 16) {
-            // Contact photo
-            ContactPhotoView(contact: favorite.contact, size: 50)
+            // Contact photo (uses custom image if set)
+            ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 50)
             
             // Contact info
             VStack(alignment: .leading, spacing: 4) {
@@ -219,7 +220,7 @@ struct FavoriteContactRow: View {
                 }
                 
                 // Show if this contact has multiple numbers in favorites
-                if contactsManager.favorites.filter({ $0.contact.identifier == favorite.contact.identifier }).count > 1 {
+                if contactsManager.favorites.filter({ $0.contactIdentifier == favorite.contact.identifier }).count > 1 {
                     Text("Multiple numbers available")
                         .font(.caption)
                         .foregroundColor(.orange)
@@ -261,13 +262,10 @@ struct FavoriteContactRow: View {
         }
         .sheet(isPresented: $showingConfig) {
             CommunicationConfigView(favorite: $favorite)
-                .onDisappear {
-                    // Update the favorite in the contacts manager
-                    if let index = contactsManager.favorites.firstIndex(where: { $0.id == favorite.id }) {
-                        contactsManager.favorites[index] = favorite
-                        contactsManager.saveFavorites()
-                    }
-                }
+        }
+        .onChange(of: favorite.customImageData) { _, _ in
+            // Save favorites when custom image data changes
+            contactsManager.saveFavorites()
         }
     }
     
@@ -285,26 +283,16 @@ struct FavoriteContactRow: View {
         
         var urlString: String
         
-        // Debug logging
-        print("🔍 Communication Debug:")
-        print("🔍 Method: \(favorite.communicationMethod.rawValue)")
-        print("🔍 App: \(favorite.communicationApp.rawValue)")
-        print("🔍 Original Phone: \(favorite.phoneNumber)")
-        print("🔍 Cleaned Phone: \(phoneNumber)")
         
         switch (favorite.communicationMethod, favorite.communicationApp) {
         case (.voiceCall, .phone):
             urlString = "tel:\(favorite.phoneNumber)" // Use original format to avoid prompts
-            print("🔍 Matched: Voice Call + Phone = TEL (original format)")
         case (.videoCall, .phone):
             urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .messages):
             urlString = "sms:\(phoneNumber)"
-            print("🔍 Matched: Text Message + Messages = SMS")
-            case (.voiceCall, .whatsapp):
-                urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
-             // urlString = "x-safari-https://whatsapp://send?phone=\(phoneNumber)"
-
+        case (.voiceCall, .whatsapp):
+            urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
         case (.videoCall, .whatsapp):
             urlString = "whatsapp://send?phone=\(phoneNumber)"
         case (.textMessage, .whatsapp):
@@ -336,17 +324,12 @@ struct FavoriteContactRow: View {
         case (.textMessage, .phone):
             // Handle legacy contacts that have Text Message + Phone (invalid combination)
             urlString = "sms:\(phoneNumber)"
-            print("🔍 Matched: Text Message + Phone (legacy) = SMS")
         default:
             // Fallback to phone call
             urlString = "tel:\(phoneNumber)"
-            print("🔍 Matched: DEFAULT case - Phone call fallback")
         }
         
-        print("🔍 Final URL: \(urlString)")
-        
         if let url = URL(string: urlString) {
-            print("🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
@@ -419,20 +402,22 @@ struct AddToFavoritesView: View {
     }
 }
 
+// (No additional utilities)
+
 /// Row view for displaying a contact in the add to favorites list
 struct ContactRow: View {
     let contact: CNContact
     @ObservedObject var contactsManager: ContactsManager
     
     private var isFavorite: Bool {
-        contactsManager.favorites.contains { $0.contact.identifier == contact.identifier }
+        contactsManager.favorites.contains { $0.contactIdentifier == contact.identifier }
     }
     
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 16) {
                 // Contact photo
-                ContactPhotoView(contact: contact, size: 40)
+                ContactPhotoView(contact: contact, customImageData: .constant(nil), size: 40)
                 
                 // Contact info
                 VStack(alignment: .leading, spacing: 2) {
@@ -526,26 +511,13 @@ struct PhoneNumberRow: View {
             Spacer()
             
             Button(action: {
-                print("🔍 TAPPING STAR for phone: \(phoneString)")
-                print("🔍 Contact ID: \(contact.identifier)")
-                print("🔍 Current isSelected: \(isSelected)")
-                print("🔍 All phone numbers for this contact:")
-                for (index, phone) in contact.phoneNumbers.enumerated() {
-                    print("🔍   \(index): \(phone.value.stringValue)")
-                }
-                
                 if isSelected {
-                    print("🗑️ REMOVING from favorites")
                     contactsManager.removeFavorite(contact: contact, phoneNumber: phoneString)
                     isSelected = false
                 } else {
-                    print("➕ ADDING to favorites")
                     contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
                     isSelected = true
                 }
-                
-                print("🔍 After action - isSelected: \(isSelected)")
-                print("🔍 Total favorites count: \(contactsManager.favorites.count)")
             }) {
                 Image(systemName: isSelected ? "star.fill" : "star")
                     .foregroundColor(isSelected ? .yellow : .gray)
@@ -562,13 +534,13 @@ struct PhoneNumberRow: View {
         .onAppear {
             // Initialize the local state based on current favorites
             isSelected = contactsManager.favorites.contains { favorite in
-                favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
+                favorite.contactIdentifier == contact.identifier && favorite.phoneNumber == phoneString
             }
         }
-        .onChange(of: contactsManager.favorites) { newFavorites in
+        .onChange(of: contactsManager.favorites) { _, newFavorites in
             // Update local state when favorites change
             isSelected = newFavorites.contains { favorite in
-                favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneString
+                favorite.contactIdentifier == contact.identifier && favorite.phoneNumber == phoneString
             }
         }
     }
@@ -577,16 +549,24 @@ struct PhoneNumberRow: View {
 /// Reusable view for displaying contact photos with fallback to initials
 struct ContactPhotoView: View {
     let contact: CNContact
+    @Binding var customImageData: Data?
     let size: CGFloat
     
-    init(contact: CNContact, size: CGFloat = 50) {
+    init(contact: CNContact, customImageData: Binding<Data?>, size: CGFloat = 50) {
         self.contact = contact
+        self._customImageData = customImageData
         self.size = size
     }
     
     var body: some View {
         Group {
-            if let imageData = contact.thumbnailImageData ?? contact.imageData,
+            if let data = customImageData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if let imageData = contact.thumbnailImageData ?? contact.imageData,
                let uiImage = UIImage(data: imageData) {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -605,6 +585,7 @@ struct ContactPhotoView: View {
                     }
             }
         }
+        .id("\(contact.identifier)_\(customImageData?.count ?? 0)")
     }
 }
 
@@ -669,7 +650,25 @@ class ContactsManager: ObservableObject {
     private func loadFavorites() {
         if let data = UserDefaults.standard.data(forKey: "favorites"),
            let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
-            self.favorites = favorites
+            // Refetch CNContact for each favorite using stored identifier so image data is present
+            var rebuilt: [FavoriteContact] = []
+            for var fav in favorites {
+                do {
+                    let fetched = try store.unifiedContact(withIdentifier: fav.contactIdentifier, keysToFetch: [
+                        CNContactGivenNameKey as CNKeyDescriptor,
+                        CNContactFamilyNameKey as CNKeyDescriptor,
+                        CNContactPhoneNumbersKey as CNKeyDescriptor,
+                        CNContactImageDataKey as CNKeyDescriptor,
+                        CNContactThumbnailImageDataKey as CNKeyDescriptor
+                    ])
+                    fav.contact = fetched
+                    rebuilt.append(fav)
+                } catch {
+                    // Keep placeholder contact if fetch fails
+                    rebuilt.append(fav)
+                }
+            }
+            self.favorites = rebuilt
         }
     }
     
@@ -682,12 +681,6 @@ class ContactsManager: ObservableObject {
     
     /// Adds a contact to favorites with a specific phone number
     func addToFavorites(contact: CNContact, phoneNumber: String) {
-        print("📞 addToFavorites CALLED")
-        print("📞 Contact ID: \(contact.identifier)")
-        print("📞 Phone Number: \(phoneNumber)")
-        print("📞 Contact has \(contact.phoneNumbers.count) phone numbers")
-        print("📞 Current favorites count: \(favorites.count)")
-        
         let favorite = FavoriteContact(
             contact: contact,
             phoneNumber: phoneNumber,
@@ -696,18 +689,12 @@ class ContactsManager: ObservableObject {
         
         // Check if this exact combination (contact + phone number) already exists
         let alreadyExists = favorites.contains { existingFavorite in
-            existingFavorite.contact.identifier == contact.identifier && existingFavorite.phoneNumber == phoneNumber
+            existingFavorite.contactIdentifier == contact.identifier && existingFavorite.phoneNumber == phoneNumber
         }
         
-        print("📞 Already exists: \(alreadyExists)")
-        
         if !alreadyExists {
-            print("📞 Adding new favorite")
             favorites.append(favorite)
             saveFavorites()
-            print("📞 New favorites count: \(favorites.count)")
-        } else {
-            print("📞 Skipping - already exists")
         }
     }
     
@@ -719,14 +706,14 @@ class ContactsManager: ObservableObject {
     
     /// Removes a contact from favorites
     func removeFavorite(contact: CNContact) {
-        favorites.removeAll { $0.contact.identifier == contact.identifier }
+        favorites.removeAll { $0.contactIdentifier == contact.identifier }
         saveFavorites()
     }
     
     /// Removes a specific contact with specific phone number from favorites
     func removeFavorite(contact: CNContact, phoneNumber: String) {
         favorites.removeAll { favorite in
-            favorite.contact.identifier == contact.identifier && favorite.phoneNumber == phoneNumber
+            favorite.contactIdentifier == contact.identifier && favorite.phoneNumber == phoneNumber
         }
         saveFavorites()
     }
@@ -747,21 +734,26 @@ class ContactsManager: ObservableObject {
 /// Model for favorite contacts
 struct FavoriteContact: Identifiable, Codable, Equatable {
     let id = UUID()
-    let contact: CNContact
+    var contact: CNContact
+    let contactIdentifier: String
     let phoneNumber: String
     let displayName: String
     var communicationMethod: CommunicationMethod
     var communicationApp: CommunicationApp
+    // Optional custom avatar image data selected by user
+    var customImageData: Data?
     
     enum CodingKeys: String, CodingKey {
-        case phoneNumber, displayName, communicationMethod, communicationApp
+        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageData
     }
     
-    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil) {
+    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil, customImageData: Data? = nil) {
         self.contact = contact
+        self.contactIdentifier = contact.identifier
         self.phoneNumber = phoneNumber
         self.displayName = displayName
         self.communicationMethod = communicationMethod
+        self.customImageData = customImageData
         
         // Set appropriate default app based on communication method
         if let app = communicationApp {
@@ -780,27 +772,30 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        contactIdentifier = try container.decode(String.self, forKey: .contactIdentifier)
         phoneNumber = try container.decode(String.self, forKey: .phoneNumber)
         displayName = try container.decode(String.self, forKey: .displayName)
         communicationMethod = try container.decodeIfPresent(CommunicationMethod.self, forKey: .communicationMethod) ?? .voiceCall
         communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phone
+        customImageData = try container.decodeIfPresent(Data.self, forKey: .customImageData)
         
-        // Reconstruct contact from stored data
-        let tempContact = CNContact()
-        contact = tempContact
+        // Placeholder; will be replaced after load using contactIdentifier
+        contact = CNContact()
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(contactIdentifier, forKey: .contactIdentifier)
         try container.encode(phoneNumber, forKey: .phoneNumber)
         try container.encode(displayName, forKey: .displayName)
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
+        try container.encodeIfPresent(customImageData, forKey: .customImageData)
     }
     
     // MARK: - Equatable
     static func == (lhs: FavoriteContact, rhs: FavoriteContact) -> Bool {
-        return lhs.contact.identifier == rhs.contact.identifier &&
+        return lhs.contactIdentifier == rhs.contactIdentifier &&
                lhs.phoneNumber == rhs.phoneNumber &&
                lhs.displayName == rhs.displayName &&
                lhs.communicationMethod == rhs.communicationMethod &&
@@ -947,100 +942,9 @@ struct CommunicationConfigView: View {
                     }
                 }
                 
-                Section("Available Communication Apps") {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(CommunicationApp.allCases, id: \.self) { app in
-                            HStack {
-                                Image(systemName: app.icon)
-                                    .foregroundColor(availableApps.contains(app) ? .green : .gray)
-                                    .frame(width: 20)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(app.rawValue)
-                                        .foregroundColor(availableApps.contains(app) ? .primary : .secondary)
-                                    
-                                    // Debug info
-                                    Text("Scheme: \(app.urlScheme)://")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                if availableApps.contains(app) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .font(.caption)
-                                } else {
-                                    Text("Not Installed")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                }
-                
-                Section("Debug Info") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Detection Results:")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                        
-                        ForEach(CommunicationApp.allCases, id: \.self) { app in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(app.rawValue)
-                                        .font(.caption2)
-                                        .fontWeight(.medium)
-                                    
-                                    Text("Scheme: \(app.urlScheme)://")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Text(AppDetectionUtility.isAppInstalled(urlScheme: app.urlScheme) ? "✅" : "❌")
-                                    .font(.caption)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("All URL Schemes Test:")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                            
-                            let debugResults = AppDetectionUtility.debugAllSchemes()
-                            ForEach(Array(debugResults.keys.sorted()), id: \.self) { scheme in
-                                HStack {
-                                    Text("\(scheme)://")
-                                        .font(.caption2)
-                                        .monospaced()
-                                    
-                                    Spacer()
-                                    
-                                    Text(debugResults[scheme] == true ? "✅" : "❌")
-                                        .font(.caption2)
-                                }
-                            }
-                        }
-                        
-                        Button("Refresh Detection") {
-                            loadAvailableApps()
-                        }
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.top, 4)
-                    }
-                }
                 
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                         Text("Preview:")
                             .font(.headline)
                         
@@ -1057,6 +961,17 @@ struct CommunicationConfigView: View {
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
                     }
+                }
+                
+                Section("Photo") {
+                    if #available(iOS 16.0, *) {
+                        PhotoPickerSection(favorite: $favorite)
+                    } else {
+                        Text("Photo editing requires iOS 16+")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
                 }
             }
             .navigationTitle("Configure Communication")
@@ -1089,6 +1004,88 @@ struct CommunicationConfigView: View {
         // Ensure selected app is available, otherwise select first available
         if !availableApps.contains(selectedApp) {
             selectedApp = availableApps.first ?? .phone
+        }
+    }
+}
+
+// MARK: - Photo Picker Section
+@available(iOS 16.0, *)
+struct PhotoPickerSection: View {
+    @Binding var favorite: FavoriteContact
+    @State private var selectedItem: PhotosPickerItem? = nil
+    
+    init(favorite: Binding<FavoriteContact>) {
+        self._favorite = favorite
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 60)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    // Photo picker button
+                    PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                        HStack {
+                            Image(systemName: "photo")
+                                .foregroundColor(.blue)
+                            Text("Choose Photo")
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    if favorite.customImageData != nil {
+                        Button(role: .destructive) {
+                            favorite.customImageData = nil
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Remove Custom Photo")
+                            }
+                        }
+                        .font(.caption)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(6)
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                
+            }
+        }
+        .onChange(of: selectedItem) { _, newItem in
+            guard let item = newItem else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    let resized = resizeImage(uiImage, maxDimension: 256)
+                    if let jpeg = resized.jpegData(compressionQuality: 0.85) {
+                        DispatchQueue.main.async {
+                            favorite.customImageData = jpeg
+                            selectedItem = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func resizeImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let width = image.size.width
+        let height = image.size.height
+        let scale = min(1, maxDimension / max(width, height))
+        let newSize = CGSize(width: width * scale, height: height * scale)
+        if scale >= 1 { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 }
