@@ -24,6 +24,14 @@ enum CommunicationMethod: String, CaseIterable, Codable {
         case .textMessage: return "message.fill"
         }
     }
+    
+    var iconName: String {
+        return icon
+    }
+    
+    var displayName: String {
+        return self.rawValue
+    }
 }
 
 enum CommunicationApp: String, CaseIterable, Codable {
@@ -45,6 +53,14 @@ enum CommunicationApp: String, CaseIterable, Codable {
         case .signal: return "message.fill"
         case .viber: return "message.fill"
         }
+    }
+    
+    var iconName: String {
+        return icon
+    }
+    
+    var displayName: String {
+        return self.rawValue
     }
     
     var urlScheme: String {
@@ -77,6 +93,8 @@ struct ContentView: View {
     @StateObject private var contactsManager = ContactsManager()
     @State private var showingAddToFavorites = false
     @State private var isEditMode = false
+    @State private var currentContactIndex = 0
+    @State private var showingContactDetail = false
     
     var body: some View {
         NavigationStack {
@@ -104,6 +122,26 @@ struct ContentView: View {
                     }
                 }
                 
+                ToolbarItem(placement: .principal) {
+                    if !contactsManager.favorites.isEmpty && !isEditMode {
+                        HStack(spacing: 30) {
+                            Button("←") {
+                                navigateToPreviousContact()
+                            }
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.blue)
+                            .disabled(contactsManager.favorites.isEmpty)
+                            
+                            Button("→") {
+                                navigateToNextContact()
+                            }
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.blue)
+                            .disabled(contactsManager.favorites.isEmpty)
+                        }
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if isEditMode {
                         Button {
@@ -117,6 +155,17 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingAddToFavorites) {
                 AddToFavoritesView(contactsManager: contactsManager)
+            }
+            .sheet(isPresented: $showingContactDetail) {
+                if currentContactIndex < contactsManager.favorites.count {
+                    ContactDetailView(
+                        favorite: Binding(
+                            get: { contactsManager.favorites[currentContactIndex] },
+                            set: { _ in }
+                        ),
+                        contactsManager: contactsManager
+                    )
+                }
             }
         }
         .onAppear {
@@ -172,6 +221,24 @@ struct ContentView: View {
     private func moveFavorites(from source: IndexSet, to destination: Int) {
         contactsManager.moveFavorites(from: source, to: destination)
     }
+    
+    /// Navigates to the previous contact
+    private func navigateToPreviousContact() {
+        if contactsManager.favorites.count > 0 {
+            currentContactIndex = (currentContactIndex - 1 + contactsManager.favorites.count) % contactsManager.favorites.count
+            showingContactDetail = true
+            print("🔍 Navigated to previous contact: \(contactsManager.favorites[currentContactIndex].displayName) (index: \(currentContactIndex))")
+        }
+    }
+    
+    /// Navigates to the next contact
+    private func navigateToNextContact() {
+        if contactsManager.favorites.count > 0 {
+            currentContactIndex = (currentContactIndex + 1) % contactsManager.favorites.count
+            showingContactDetail = true
+            print("🔍 Navigated to next contact: \(contactsManager.favorites[currentContactIndex].displayName) (index: \(currentContactIndex))")
+        }
+    }
 }
 
 /// Row view for displaying a favorite contact
@@ -180,11 +247,13 @@ struct FavoriteContactRow: View {
     let isEditMode: Bool
     @ObservedObject var contactsManager: ContactsManager
     @State private var showingConfig = false
+    @State private var showingDetail = false
     
     init(favorite: Binding<FavoriteContact>, isEditMode: Bool, contactsManager: ContactsManager) {
         self._favorite = favorite
         self.isEditMode = isEditMode
         self.contactsManager = contactsManager
+        print("🔍 FavoriteContactRow created for: \(favorite.wrappedValue.displayName), isEditMode: \(isEditMode)")
     }
     
     var body: some View {
@@ -256,12 +325,20 @@ struct FavoriteContactRow: View {
         }
         .padding(.vertical, 4)
         .onTapGesture {
+            print("🔍 FavoriteContactRow tapped - isEditMode: \(isEditMode)")
             if isEditMode {
+                print("🔍 Opening config sheet")
                 showingConfig = true
+            } else {
+                print("🔍 Opening detail view")
+                showingDetail = true
             }
         }
         .sheet(isPresented: $showingConfig) {
             CommunicationConfigView(favorite: $favorite)
+        }
+        .sheet(isPresented: $showingDetail) {
+            ContactDetailView(favorite: $favorite, contactsManager: contactsManager)
         }
         .onChange(of: favorite.customImageData) { _, _ in
             // Save favorites when custom image data changes
@@ -1086,6 +1163,305 @@ struct PhotoPickerSection: View {
         let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
+}
+
+/// Detailed view for a single contact with swipe navigation
+struct ContactDetailView: View {
+    @Binding var favorite: FavoriteContact
+    @ObservedObject var contactsManager: ContactsManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentIndex: Int = 0
+    
+    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager) {
+        self._favorite = favorite
+        self.contactsManager = contactsManager
+        // Find the current index of this favorite
+        if let index = contactsManager.favorites.firstIndex(where: { $0.id == favorite.wrappedValue.id }) {
+            self._currentIndex = State(initialValue: index)
+            print("🔍 ContactDetailView init: Starting at index \(index) of \(contactsManager.favorites.count)")
+        } else {
+            print("🔍 ContactDetailView init: Could not find favorite in list!")
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            TabView(selection: $currentIndex) {
+                ForEach(Array(contactsManager.favorites.enumerated()), id: \.element.id) { index, fav in
+                    ContactDetailPage(
+                        favorite: Binding(
+                            get: { fav },
+                            set: { _ in }
+                        ),
+                        contactsManager: contactsManager
+                    )
+                    .tag(index)
+                    .onAppear {
+                        print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
+                    }
+                }
+            }
+            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+            .onChange(of: currentIndex) { oldValue, newValue in
+                print("🔍 TabView currentIndex changed from \(oldValue) to \(newValue)")
+                if newValue < contactsManager.favorites.count {
+                    print("🔍 Now showing: \(contactsManager.favorites[newValue].displayName)")
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Home") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    VStack {
+                        Text("\(currentIndex + 1) of \(contactsManager.favorites.count)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        // Navigation buttons
+                        HStack(spacing: 30) {
+                            Button("←") {
+                                if currentIndex > 0 {
+                                    currentIndex -= 1
+                                } else {
+                                    currentIndex = contactsManager.favorites.count - 1
+                                }
+                            }
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.blue)
+                            
+                            Button("→") {
+                                if currentIndex < contactsManager.favorites.count - 1 {
+                                    currentIndex += 1
+                                } else {
+                                    currentIndex = 0
+                                }
+                            }
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.blue)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Individual contact detail page
+struct ContactDetailPage: View {
+    @Binding var favorite: FavoriteContact
+    @ObservedObject var contactsManager: ContactsManager
+    
+    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager) {
+        self._favorite = favorite
+        self.contactsManager = contactsManager
+        print("🔍 ContactDetailPage init for: \(favorite.wrappedValue.displayName)")
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                // Contact Photo
+                ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 120)
+                    .padding(.top, 20)
+                
+                // Contact Name
+                Text(favorite.displayName)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .multilineTextAlignment(.center)
+                
+                // Debug info
+                Text("Contact: \(favorite.displayName)")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(.horizontal)
+                    .background(Color.yellow.opacity(0.3))
+                    .cornerRadius(8)
+                
+                // Phone Number
+                Text(favorite.phoneNumber)
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                // Communication Configuration
+                VStack(spacing: 16) {
+                    Text("Communication Settings")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    // Method and App
+                    HStack(spacing: 20) {
+                        VStack {
+                            Image(systemName: favorite.communicationMethod.iconName)
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            Text(favorite.communicationMethod.displayName)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Image(systemName: "arrow.right")
+                            .foregroundColor(.secondary)
+                        
+                        VStack {
+                            Image(systemName: favorite.communicationApp.iconName)
+                                .font(.title2)
+                                .foregroundColor(.green)
+                            Text(favorite.communicationApp.displayName)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                
+                // Dial Button
+                Button(action: {
+                    initiateCommunication()
+                }) {
+                    HStack {
+                        Image(systemName: favorite.communicationMethod.iconName)
+                            .font(.title2)
+                        Text("Dial \(favorite.communicationMethod.displayName)")
+                            .font(.headline)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [.blue, .blue.opacity(0.8)]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 20)
+                
+                // Additional Communication Options
+                VStack(spacing: 12) {
+                    Text("Other Options")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                        ForEach(CommunicationMethod.allCases, id: \.self) { method in
+                            if method != favorite.communicationMethod {
+                                Button(action: {
+                                    initiateCommunicationWithMethod(method)
+                                }) {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: method.iconName)
+                                            .font(.title2)
+                                            .foregroundColor(.blue)
+                                        Text(method.displayName)
+                                            .font(.caption)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer(minLength: 50)
+            }
+        }
+    }
+    
+    /// Initiates communication with the current favorite's settings
+    private func initiateCommunication() {
+        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
+        let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        
+        var urlString: String
+        
+        switch (favorite.communicationMethod, favorite.communicationApp) {
+        case (.voiceCall, .phone):
+            urlString = "tel:\(favorite.phoneNumber)"
+        case (.videoCall, .phone):
+            urlString = "facetime:\(phoneNumber)"
+        case (.textMessage, .messages):
+            urlString = "sms:\(phoneNumber)"
+        case (.voiceCall, .whatsapp):
+            urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
+        case (.videoCall, .whatsapp):
+            urlString = "whatsapp://send?phone=\(phoneNumber)"
+        case (.textMessage, .whatsapp):
+            urlString = "whatsapp://send?phone=\(phoneNumber)"
+        case (.voiceCall, .telegram):
+            urlString = "tg://resolve?domain=\(phoneNumber)"
+        case (.videoCall, .telegram):
+            urlString = "tg://resolve?domain=\(phoneNumber)"
+        case (.textMessage, .telegram):
+            urlString = "tg://resolve?domain=\(phoneNumber)"
+        case (.voiceCall, .facetime):
+            urlString = "facetime-audio:\(phoneNumber)"
+        case (.videoCall, .facetime):
+            urlString = "facetime:\(phoneNumber)"
+        case (.textMessage, .facetime):
+            urlString = "sms:\(phoneNumber)"
+        case (.voiceCall, .signal):
+            urlString = "sgnl://send?phone=\(phoneNumber)"
+        case (.videoCall, .signal):
+            urlString = "sgnl://send?phone=\(phoneNumber)"
+        case (.textMessage, .signal):
+            urlString = "sgnl://send?phone=\(phoneNumber)"
+        case (.voiceCall, .viber):
+            urlString = "viber://chat?number=\(phoneNumber)"
+        case (.videoCall, .viber):
+            urlString = "viber://chat?number=\(phoneNumber)"
+        case (.textMessage, .viber):
+            urlString = "viber://chat?number=\(phoneNumber)"
+        case (.textMessage, .phone):
+            urlString = "sms:\(phoneNumber)"
+        default:
+            urlString = "tel:\(phoneNumber)"
+        }
+        
+        if let url = URL(string: urlString) {
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+        }
+    }
+    
+    /// Initiates communication with a specific method
+    private func initiateCommunicationWithMethod(_ method: CommunicationMethod) {
+        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
+        let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        
+        var urlString: String
+        
+        switch method {
+        case .voiceCall:
+            urlString = "tel:\(favorite.phoneNumber)"
+        case .videoCall:
+            urlString = "facetime:\(phoneNumber)"
+        case .textMessage:
+            urlString = "sms:\(phoneNumber)"
+        }
+        
+        if let url = URL(string: urlString) {
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
         }
     }
 }
