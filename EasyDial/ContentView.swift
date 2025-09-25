@@ -126,7 +126,7 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        Button("Easy Dial") {
+                        Button("Enter Easy Dial") {
                             // Use the current session's lastViewedContactIndex, not the saved one
                             print("🔍 Easy Dial button pressed, using lastViewedContactIndex: \(lastViewedContactIndex)")
                             showingContactDetail = true
@@ -146,6 +146,7 @@ struct ContentView: View {
                             Image(systemName: "plus")
                         }
                         .accessibilityLabel("Add to favorites")
+                        .padding(.trailing, 8)
                     }
                 }
             }
@@ -271,20 +272,24 @@ struct FavoriteContactRow: View {
                     .foregroundColor(.secondary)
                 
                 // Show communication method and app
-                HStack {
-                    Image(systemName: favorite.communicationMethod.icon)
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                    Text(favorite.communicationMethod.rawValue)
-                        .font(.caption)
-                        .foregroundColor(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Image(systemName: favorite.communicationMethod.icon)
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        Text(favorite.communicationMethod.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
                     
-                    Image(systemName: favorite.communicationApp.icon)
-                        .foregroundColor(.green)
-                        .font(.caption)
-                    Text(favorite.communicationApp.rawValue)
-                        .font(.caption)
-                        .foregroundColor(.green)
+                    HStack {
+                        Image(systemName: favorite.communicationApp.icon)
+                            .foregroundColor(.green)
+                            .font(.caption)
+                        Text(favorite.communicationApp.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
                 }
                 
             }
@@ -325,7 +330,7 @@ struct FavoriteContactRow: View {
             }
         }
         .sheet(isPresented: $showingConfig) {
-            CommunicationConfigView(favorite: $favorite)
+            CommunicationConfigView(favorite: $favorite, contactsManager: contactsManager)
         }
         .onChange(of: favorite.customImageData) { _, _ in
             // Save favorites when custom image data changes
@@ -958,12 +963,14 @@ class AppDetectionUtility {
 struct CommunicationConfigView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var favorite: FavoriteContact
+    @ObservedObject var contactsManager: ContactsManager
     @State private var selectedMethod: CommunicationMethod
     @State private var selectedApp: CommunicationApp
     @State private var availableApps: [CommunicationApp] = []
     
-    init(favorite: Binding<FavoriteContact>) {
+    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager) {
         self._favorite = favorite
+        self.contactsManager = contactsManager
         self._selectedMethod = State(initialValue: favorite.wrappedValue.communicationMethod)
         self._selectedApp = State(initialValue: favorite.wrappedValue.communicationApp)
     }
@@ -971,8 +978,8 @@ struct CommunicationConfigView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Communication Method") {
-                    Picker("Method", selection: $selectedMethod) {
+                Section("Call Type") {
+                    Picker("Call Type", selection: $selectedMethod) {
                         ForEach(CommunicationMethod.allCases, id: \.self) { method in
                             HStack {
                                 Image(systemName: method.icon)
@@ -985,7 +992,7 @@ struct CommunicationConfigView: View {
                     .pickerStyle(.menu)
                 }
                 
-                Section("Communication App") {
+                Section("Using App") {
                     if availableApps.isEmpty {
                         Text("No compatible apps found")
                             .foregroundColor(.secondary)
@@ -995,7 +1002,7 @@ struct CommunicationConfigView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
-                            Picker("App", selection: $selectedApp) {
+                            Picker("Using App", selection: $selectedApp) {
                                 ForEach(availableApps, id: \.self) { app in
                                     HStack {
                                         Image(systemName: app.icon)
@@ -1063,6 +1070,7 @@ struct CommunicationConfigView: View {
                     Button("Save") {
                         favorite.communicationMethod = selectedMethod
                         favorite.communicationApp = selectedApp
+                        contactsManager.saveFavorites()
                         dismiss()
                     }
                     .fontWeight(.semibold)
@@ -1323,7 +1331,8 @@ struct ContactDetailPage: View {
                 
                 // Settings Button - Below phone number showing dial method
                 Button(action: {
-                    // This would open settings - for now just a placeholder
+                    print("🔍 CALL METHOD TAPPED - Initiating dial!")
+                    initiateCommunication()
                 }) {
                     HStack(spacing: 8) {
                         VStack(spacing: 2) {
