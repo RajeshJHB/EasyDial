@@ -288,12 +288,6 @@ struct FavoriteContactRow: View {
                         .foregroundColor(.green)
                 }
                 
-                // Show if this contact has multiple numbers in favorites
-                if contactsManager.favorites.filter({ $0.contactIdentifier == favorite.contact.identifier }).count > 1 {
-                    Text("Multiple numbers available")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
             }
             
             Spacer()
