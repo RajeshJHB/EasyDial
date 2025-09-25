@@ -435,6 +435,7 @@ struct AddToFavoritesView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var contactsManager: ContactsManager
     @State private var searchText = ""
+    @State private var selectedContacts: Set<String> = []
     
     var body: some View {
         NavigationStack {
@@ -446,7 +447,7 @@ struct AddToFavoritesView: View {
                 }
                 
                 List(filteredContacts) { contact in
-                    ContactRow(contact: contact, contactsManager: contactsManager)
+                    ContactRow(contact: contact, contactsManager: contactsManager, selectedContacts: $selectedContacts)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 }
                 .searchable(text: $searchText, prompt: "Search contacts")
@@ -456,6 +457,27 @@ struct AddToFavoritesView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
+                        // Add all selected contacts to favorites
+                        for selectedId in selectedContacts {
+                            // Check if it's a single contact (no underscore) or individual phone number (has underscore)
+                            if selectedId.contains("_") {
+                                // Individual phone number selection
+                                let components = selectedId.split(separator: "_")
+                                if components.count == 2,
+                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }),
+                                   let phoneNumber = contact.phoneNumbers.first(where: { $0.identifier == String(components[1]) }) {
+                                    contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber.value.stringValue)
+                                }
+                            } else {
+                                // Single contact selection
+                                if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
+                                    if contact.phoneNumbers.count == 1,
+                                       let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
+                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                                    }
+                                }
+                            }
+                        }
                         dismiss()
                     }
                 }
@@ -491,6 +513,7 @@ struct AddToFavoritesView: View {
 struct ContactRow: View {
     let contact: CNContact
     @ObservedObject var contactsManager: ContactsManager
+    @Binding var selectedContacts: Set<String>
     @State private var isSelected: Bool = false
     
     var body: some View {
@@ -519,13 +542,20 @@ struct ContactRow: View {
                 
                 Spacer()
                 
-                // Add button
+                // Select/Toggle button
                 Button {
                     if contact.phoneNumbers.count == 1 {
-                        // Single number - add directly
-                        if let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
-                            contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
-                            isSelected = true
+                        // Single number - toggle selection (visual only)
+                        if contact.phoneNumbers.first?.value.stringValue != nil {
+                            if isSelected {
+                                // Already selected - unselect
+                                isSelected = false
+                                selectedContacts.remove(contact.identifier)
+                            } else {
+                                // Not selected - select (will be added to favorites when session ends)
+                                isSelected = true
+                                selectedContacts.insert(contact.identifier)
+                            }
                         }
                     }
                     // For multiple numbers, users must select individual numbers below
@@ -551,7 +581,8 @@ struct ContactRow: View {
                         PhoneNumberRow(
                             contact: contact,
                             phoneNumber: phoneNumber,
-                            contactsManager: contactsManager
+                            contactsManager: contactsManager,
+                            selectedContacts: $selectedContacts
                         )
                         .id("\(contact.identifier)_\(phoneNumber.identifier)")
                     }
@@ -568,6 +599,7 @@ struct PhoneNumberRow: View {
     let contact: CNContact
     let phoneNumber: CNLabeledValue<CNPhoneNumber>
     @ObservedObject var contactsManager: ContactsManager
+    @Binding var selectedContacts: Set<String>
     @State private var isSelected: Bool = false
     
     private var phoneString: String {
@@ -584,8 +616,17 @@ struct PhoneNumberRow: View {
             Spacer()
             
             Button(action: {
-                contactsManager.addToFavorites(contact: contact, phoneNumber: phoneString)
-                isSelected = true
+                if isSelected {
+                    // Already selected - unselect
+                    isSelected = false
+                    let phoneId = "\(contact.identifier)_\(phoneNumber.identifier)"
+                    selectedContacts.remove(phoneId)
+                } else {
+                    // Not selected - select (will be added to favorites when session ends)
+                    isSelected = true
+                    let phoneId = "\(contact.identifier)_\(phoneNumber.identifier)"
+                    selectedContacts.insert(phoneId)
+                }
             }) {
                 Image(systemName: isSelected ? "star.fill" : "star")
                     .foregroundColor(isSelected ? .yellow : .gray)
