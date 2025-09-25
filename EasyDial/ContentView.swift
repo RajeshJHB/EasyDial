@@ -1422,12 +1422,19 @@ struct ContactDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    dismiss()
+                    // Single tap - do nothing (prevent accidental dismissal)
                 }) {
                     Text("Home")
                         .font(.headline)
                         .foregroundColor(.blue)
                 }
+                .simultaneousGesture(
+                    TapGesture(count: 2)
+                        .onEnded {
+                            // Double tap - go home
+                            dismiss()
+                        }
+                )
             }
             
             ToolbarItem(placement: .principal) {
