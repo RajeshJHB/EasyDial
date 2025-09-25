@@ -1214,12 +1214,15 @@ struct ContactDetailView: View {
                                             currentIndex = contactsManager.favorites.count - 1
                                         }
                                     }) {
-                                        Text("")
-                                            .frame(width: 80, height: 160)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                            )
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                .frame(width: 80, height: 160)
+                                            
+                                            Image(systemName: "chevron.left")
+                                                .font(.title)
+                                                .foregroundColor(.gray.opacity(0.3))
+                                        }
                                     }
                     .accessibilityLabel("Previous contact")
                     
@@ -1234,12 +1237,15 @@ struct ContactDetailView: View {
                                             currentIndex = 0
                                         }
                                     }) {
-                                        Text("")
-                                            .frame(width: 80, height: 160)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                            )
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                                .frame(width: 80, height: 160)
+                                            
+                                            Image(systemName: "chevron.right")
+                                                .font(.title)
+                                                .foregroundColor(.gray.opacity(0.3))
+                                        }
                                     }
                     .accessibilityLabel("Next contact")
                 }
@@ -1317,33 +1323,35 @@ struct ContactDetailPage: View {
                 Button(action: {
                     // This would open settings - for now just a placeholder
                 }) {
-                    HStack(spacing: 8) {
-                        VStack(spacing: 2) {
+                    HStack(spacing: 16) {
+                        VStack(spacing: 4) {
                             Image(systemName: favorite.communicationMethod.iconName)
-                                .font(.title3)
+                                .font(.title2)
                                 .foregroundColor(.blue)
                             Text(favorite.communicationMethod.displayName)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
                         }
                         
                         Image(systemName: "arrow.right")
-                            .font(.caption)
+                            .font(.body)
                             .foregroundColor(.secondary)
                         
-                        VStack(spacing: 2) {
+                        VStack(spacing: 4) {
                             Image(systemName: favorite.communicationApp.iconName)
-                                .font(.title3)
+                                .font(.title2)
                                 .foregroundColor(.green)
                             Text(favorite.communicationApp.displayName)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                     .background(Color(.systemGray6))
-                    .cornerRadius(8)
+                    .cornerRadius(12)
                 }
                 .padding(.horizontal)
                 
