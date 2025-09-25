@@ -22,5 +22,7 @@
 		<string>tel</string>
 		<string>sms</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to camera to take photos for contact pictures.</string>
 </dict>
 </plist>

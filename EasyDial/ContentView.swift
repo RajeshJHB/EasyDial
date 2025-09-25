@@ -1169,6 +1169,7 @@ struct CommunicationConfigView: View {
 struct PhotoPickerSection: View {
     @Binding var favorite: FavoriteContact
     @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var showingCamera = false
     
     init(favorite: Binding<FavoriteContact>) {
         self._favorite = favorite
@@ -1180,19 +1181,37 @@ struct PhotoPickerSection: View {
                 ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 60)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Photo picker button
-                    PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                        HStack {
-                            Image(systemName: "photo")
-                                .foregroundColor(.blue)
-                            Text("Choose Photo")
+                    HStack(spacing: 12) {
+                        // Gallery picker button
+                        PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                            HStack {
+                                Image(systemName: "photo")
+                                    .foregroundColor(.blue)
+                                Text("Gallery")
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Camera button
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "camera")
+                                    .foregroundColor(.green)
+                                Text("Camera")
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                     
                     if favorite.customImageData != nil {
                         Button(role: .destructive) {
@@ -1213,6 +1232,9 @@ struct PhotoPickerSection: View {
                 }
                 
             }
+        }
+        .sheet(isPresented: $showingCamera) {
+            CameraPicker(favorite: $favorite)
         }
         .onChange(of: selectedItem) { _, newItem in
             guard let item = newItem else { return }
@@ -1242,6 +1264,62 @@ struct PhotoPickerSection: View {
         let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
+}
+
+// MARK: - Camera Picker
+struct CameraPicker: UIViewControllerRepresentable {
+    @Binding var favorite: FavoriteContact
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .camera
+        picker.allowsEditing = true
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraPicker
+        
+        init(_ parent: CameraPicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let editedImage = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage {
+                let resized = resizeImage(editedImage, maxDimension: 512)
+                if let jpeg = resized.jpegData(compressionQuality: 0.85) {
+                    parent.favorite.customImageData = jpeg
+                }
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+        
+        private func resizeImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+            let width = image.size.width
+            let height = image.size.height
+            let scale = min(1, maxDimension / max(width, height))
+            let newSize = CGSize(width: width * scale, height: height * scale)
+            if scale >= 1 { return image }
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+            return renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: newSize))
+            }
         }
     }
 }
