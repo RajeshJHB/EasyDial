@@ -399,8 +399,17 @@ struct FavoriteContactRow: View {
         }
         
         if let url = URL(string: urlString) {
+            print("🔍 Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
+                    .universalLinksOnly: false  // Allow custom URL schemes
+                ]
+                UIApplication.shared.open(url, options: options) { success in
+                    print("🔍 URL opened successfully: \(success)")
+                    if !success {
+                        print("🔍 Failed to open URL: \(urlString)")
+                    }
+                }
             }
         }
     }
@@ -410,7 +419,12 @@ struct FavoriteContactRow: View {
         let phoneNumber = phoneNumber.filter { $0.isNumber }
         if let url = URL(string: "tel:\(phoneNumber)") {
             DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
+                    .universalLinksOnly: false
+                ]
+                UIApplication.shared.open(url, options: options) { success in
+                    print("🔍 Legacy call URL opened successfully: \(success)")
+                }
             }
         }
     }
@@ -1426,8 +1440,17 @@ struct ContactDetailPage: View {
         }
         
         if let url = URL(string: urlString) {
+            print("🔍 ContactDetailPage Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
+                    .universalLinksOnly: false  // Allow custom URL schemes
+                ]
+                UIApplication.shared.open(url, options: options) { success in
+                    print("🔍 ContactDetailPage URL opened successfully: \(success)")
+                    if !success {
+                        print("🔍 ContactDetailPage Failed to open URL: \(urlString)")
+                    }
+                }
             }
         }
     }
@@ -1450,7 +1473,12 @@ struct ContactDetailPage: View {
         
         if let url = URL(string: urlString) {
             DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
+                    .universalLinksOnly: false
+                ]
+                UIApplication.shared.open(url, options: options) { success in
+                    print("🔍 Method communication URL opened successfully: \(success)")
+                }
             }
         }
     }
