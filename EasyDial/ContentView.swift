@@ -619,6 +619,51 @@ struct ContactPhotoView: View {
     }
 }
 
+/// Rectangular version of ContactPhotoView for larger displays
+struct ContactPhotoViewRectangular: View {
+    let contact: CNContact
+    @Binding var customImageData: Data?
+    let width: CGFloat
+    let height: CGFloat
+    
+    init(contact: CNContact, customImageData: Binding<Data?>, width: CGFloat, height: CGFloat) {
+        self.contact = contact
+        self._customImageData = customImageData
+        self.width = width
+        self.height = height
+    }
+    
+    var body: some View {
+        Group {
+            if let data = customImageData, let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: width, height: height)
+                    .clipped()
+            } else if let imageData = contact.thumbnailImageData ?? contact.imageData,
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: width, height: height)
+                    .clipped()
+            } else {
+                // Fallback to initials
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: width, height: height)
+                    .overlay {
+                        Text(contact.givenName.prefix(1).uppercased())
+                            .font(.system(size: min(width, height) * 0.3, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+            }
+        }
+        .id("\(contact.identifier)_\(customImageData?.count ?? 0)")
+    }
+}
+
 /// Manager class for handling contacts and favorites
 class ContactsManager: ObservableObject {
     @Published var favorites: [FavoriteContact] = []
@@ -1153,66 +1198,74 @@ struct ContactDetailView: View {
                     }
                 }
             }
-            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-            // Large tap panels at the top-left and top-right for navigation
-            .overlay(alignment: .top) {
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        // DEBUG: Large obvious navigation buttons
+        .overlay(alignment: .bottom) {
+            VStack {
+                Spacer()
+                
                 HStack {
-                    // Left tap panel (previous)
-                    Color.clear
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue.opacity(0.05))
-                                )
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if currentIndex > 0 {
-                                currentIndex -= 1
-                            } else {
-                                currentIndex = contactsManager.favorites.count - 1
-                            }
-                        }
-                        .accessibilityLabel("Previous contact")
-                        .frame(width: UIScreen.main.bounds.width * 0.45)
+                    // Left navigation button (previous) - DEBUG VERSION
+                                    Button(action: {
+                                        print("🔍 LEFT BUTTON TAPPED!")
+                                        if currentIndex > 0 {
+                                            currentIndex -= 1
+                                        } else {
+                                            currentIndex = contactsManager.favorites.count - 1
+                                        }
+                                    }) {
+                                        Text("")
+                                            .frame(width: 80, height: 160)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    }
+                    .accessibilityLabel("Previous contact")
                     
-                    Spacer(minLength: 0)
+                    Spacer()
                     
-                    // Right tap panel (next)
-                    Color.clear
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue.opacity(0.05))
-                                )
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if currentIndex < contactsManager.favorites.count - 1 {
-                                currentIndex += 1
-                            } else {
-                                currentIndex = 0
-                            }
-                        }
-                        .accessibilityLabel("Next contact")
-                        .frame(width: UIScreen.main.bounds.width * 0.45)
+                    // Right navigation button (next) - DEBUG VERSION
+                                    Button(action: {
+                                        print("🔍 RIGHT BUTTON TAPPED!")
+                                        if currentIndex < contactsManager.favorites.count - 1 {
+                                            currentIndex += 1
+                                        } else {
+                                            currentIndex = 0
+                                        }
+                                    }) {
+                                        Text("")
+                                            .frame(width: 80, height: 160)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
+                                    }
+                    .accessibilityLabel("Next contact")
                 }
-                .frame(height: 140)
-                .allowsHitTesting(true)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 50)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("\(currentIndex + 1) of \(contactsManager.favorites.count)")
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    Text("Home")
                         .font(.headline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.blue)
                 }
             }
+            
+            ToolbarItem(placement: .principal) {
+                Text("\(currentIndex + 1) of \(contactsManager.favorites.count)")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+            }
+        }
         }
     }
 }
@@ -1233,61 +1286,39 @@ struct ContactDetailPage: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 20) {
-                // Contact Photo - 2/3 of screen height
-                ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: geometry.size.height * 0.4)
-                    .padding(.top, 20)
+                // Contact Photo - Much larger, almost full screen, tappable for dialing
+                            Button(action: {
+                                print("🔍 PICTURE TAPPED - Initiating dial!")
+                                initiateCommunication()
+                            }) {
+                                ContactPhotoViewRectangular(contact: favorite.contact, customImageData: $favorite.customImageData, width: geometry.size.width, height: geometry.size.height * 0.6)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(PlainButtonStyle()) // Remove default button styling
+                            .padding(.top, 10)
                 
-                // Contact Name
+                // Contact Name - Moved down more
                 Text(favorite.displayName)
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                    .padding(.top, 20)
                 
-                // Phone Number
+                // Phone Number - Simple display without navigation buttons
                 Text(favorite.phoneNumber)
                     .font(.title2)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                    .padding(.top, 10)
                 
-                // Dial Button - Bigger and Higher
+                // Settings Button - Below phone number showing dial method
                 Button(action: {
-                    initiateCommunication()
+                    // This would open settings - for now just a placeholder
                 }) {
-                    HStack {
-                        Image(systemName: favorite.communicationMethod.iconName)
-                            .font(.title)
-                        Text("Dial \(favorite.communicationMethod.displayName)")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-                    .padding(.horizontal, 30)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [.blue, .blue.opacity(0.8)]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(16)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                
-                // Communication Configuration - Smaller and Below Dial Button
-                VStack(spacing: 8) {
-                    Text("Settings")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 10)
-                    
-                    // Method and App
-                    HStack(spacing: 12) {
-                        VStack {
+                    HStack(spacing: 8) {
+                        VStack(spacing: 2) {
                             Image(systemName: favorite.communicationMethod.iconName)
                                 .font(.title3)
                                 .foregroundColor(.blue)
@@ -1300,7 +1331,7 @@ struct ContactDetailPage: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        VStack {
+                        VStack(spacing: 2) {
                             Image(systemName: favorite.communicationApp.iconName)
                                 .font(.title3)
                                 .foregroundColor(.green)
@@ -1309,29 +1340,16 @@ struct ContactDetailPage: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color(.systemGray6))
                     .cornerRadius(8)
                 }
+                .padding(.horizontal)
+                
                 
                 Spacer()
                 
-                // Home Button at bottom - Smaller without background
-                Button(action: {
-                    onHomeTapped()
-                }) {
-                    Text("Home")
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.blue, lineWidth: 2)
-                        )
-                }
-                .padding(.bottom, 30)
             }
         }
     }
