@@ -96,6 +96,7 @@ struct ContentView: View {
     @State private var currentContactIndex = 0
     @State private var showingContactDetail = false
     @State private var lastViewedContactIndex = 0
+    @State private var hasLoadedInitialIndex = false
     private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
@@ -164,6 +165,7 @@ struct ContentView: View {
                         contactsManager: contactsManager,
                         initialIndex: lastViewedContactIndex,
                         onIndexChanged: { newIndex in
+                            print("🔍 ContactDetailView onIndexChanged: \(newIndex)")
                             lastViewedContactIndex = newIndex
                             // Save to UserDefaults whenever the index changes
                             UserDefaults.standard.set(newIndex, forKey: lastViewedContactKey)
@@ -182,9 +184,21 @@ struct ContentView: View {
             if savedIndex >= 0 && savedIndex < contactsManager.favorites.count {
                 lastViewedContactIndex = savedIndex
                 print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
+                
+                // Auto-navigate to contact page ONLY on initial load (not when contacts are deleted/modified)
+                if !hasLoadedInitialIndex && lastViewedContactIndex != 0 {
+                    print("🔍 Initial load - Auto-navigating to contact page with index: \(lastViewedContactIndex)")
+                    // Use DispatchQueue to ensure state is updated before showing the cover
+                    DispatchQueue.main.async {
+                        showingContactDetail = true
+                    }
+                }
             } else {
                 print("🔍 Saved index \(savedIndex) is invalid, keeping default: \(lastViewedContactIndex)")
             }
+            
+            // Mark that we've loaded the initial index
+            hasLoadedInitialIndex = true
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // Save the last viewed contact index when app goes to background
@@ -1103,14 +1117,31 @@ struct CommunicationConfigView: View {
                         Text("Preview:")
                             .font(.headline)
                         
-                        HStack {
-                            Image(systemName: selectedMethod.icon)
-                                .foregroundColor(.blue)
-                            Text(selectedMethod.rawValue)
-                            Spacer()
-                            Image(systemName: selectedApp.icon)
-                                .foregroundColor(.green)
-                            Text(selectedApp.rawValue)
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Phone number display
+                            HStack {
+                                Image(systemName: "phone.fill")
+                                    .foregroundColor(.secondary)
+                                    .font(.subheadline)
+                                Text("Phone Number:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(favorite.phoneNumber)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            // Communication method and app
+                            HStack {
+                                Image(systemName: selectedMethod.icon)
+                                    .foregroundColor(.blue)
+                                Text(selectedMethod.rawValue)
+                                Spacer()
+                                Image(systemName: selectedApp.icon)
+                                    .foregroundColor(.green)
+                                Text(selectedApp.rawValue)
+                            }
                         }
                         .padding()
                         .background(Color.gray.opacity(0.1))
