@@ -247,7 +247,6 @@ struct FavoriteContactRow: View {
     let isEditMode: Bool
     @ObservedObject var contactsManager: ContactsManager
     @State private var showingConfig = false
-    @State private var showingDetail = false
     
     init(favorite: Binding<FavoriteContact>, isEditMode: Bool, contactsManager: ContactsManager) {
         self._favorite = favorite
@@ -319,20 +318,14 @@ struct FavoriteContactRow: View {
         }
         .padding(.vertical, 4)
         .onTapGesture {
-            print("🔍 FavoriteContactRow tapped - isEditMode: \(isEditMode)")
             if isEditMode {
-                print("🔍 Opening config sheet")
                 showingConfig = true
             } else {
-                print("🔍 Opening detail view")
-                showingDetail = true
+                initiateCommunication()
             }
         }
         .sheet(isPresented: $showingConfig) {
             CommunicationConfigView(favorite: $favorite)
-        }
-        .sheet(isPresented: $showingDetail) {
-            ContactDetailView(favorite: $favorite, contactsManager: contactsManager)
         }
         .onChange(of: favorite.customImageData) { _, _ in
             // Save favorites when custom image data changes
