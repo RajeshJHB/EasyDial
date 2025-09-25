@@ -128,8 +128,13 @@ struct ContentView: View {
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
                         Button("Enter Easy Dial") {
-                            // Use the current session's lastViewedContactIndex, not the saved one
-                            print("🔍 Easy Dial button pressed, using lastViewedContactIndex: \(lastViewedContactIndex)")
+                            // If currently -1, change to 0, otherwise keep current value
+                            if lastViewedContactIndex == -1 {
+                                lastViewedContactIndex = 0
+                                print("🔍 Easy Dial button pressed, changed lastViewedContactIndex from -1 to 0")
+                            } else {
+                                print("🔍 Easy Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
+                            }
                             showingContactDetail = true
                         }
                         .font(.title2)
@@ -155,7 +160,7 @@ struct ContentView: View {
                 AddToFavoritesView(contactsManager: contactsManager)
             }
             .fullScreenCover(isPresented: $showingContactDetail) {
-                if lastViewedContactIndex < contactsManager.favorites.count {
+                if lastViewedContactIndex >= 0 && lastViewedContactIndex < contactsManager.favorites.count {
                     let _ = print("🔍 Creating ContactDetailView with lastViewedContactIndex: \(lastViewedContactIndex)")
                     ContactDetailView(
                         favorite: Binding(
@@ -181,12 +186,17 @@ struct ContentView: View {
             // Load the last viewed contact index from UserDefaults when contacts are loaded
             let savedIndex = UserDefaults.standard.integer(forKey: lastViewedContactKey)
             print("🔍 Loading saved index: \(savedIndex), favorites count: \(contactsManager.favorites.count)")
-            if savedIndex >= 0 && savedIndex < contactsManager.favorites.count {
+            
+            // Handle no contacts case
+            if contactsManager.favorites.isEmpty {
+                lastViewedContactIndex = -1
+                print("🔍 No contacts available, set lastViewedContactIndex to -1")
+            } else if savedIndex >= 0 && savedIndex < contactsManager.favorites.count {
                 lastViewedContactIndex = savedIndex
                 print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
                 
                 // Auto-navigate to contact page ONLY on initial load (not when contacts are deleted/modified)
-                if !hasLoadedInitialIndex && lastViewedContactIndex != 0 {
+                if !hasLoadedInitialIndex && lastViewedContactIndex != -1 {
                     print("🔍 Initial load - Auto-navigating to contact page with index: \(lastViewedContactIndex)")
                     // Use DispatchQueue to ensure state is updated before showing the cover
                     DispatchQueue.main.async {
@@ -194,7 +204,9 @@ struct ContentView: View {
                     }
                 }
             } else {
-                print("🔍 Saved index \(savedIndex) is invalid, keeping default: \(lastViewedContactIndex)")
+                // Invalid saved index - set to -1 if no contacts, otherwise 0
+                lastViewedContactIndex = contactsManager.favorites.isEmpty ? -1 : 0
+                print("🔍 Saved index \(savedIndex) is invalid, set lastViewedContactIndex to: \(lastViewedContactIndex)")
             }
             
             // Mark that we've loaded the initial index
@@ -203,6 +215,15 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // Save the last viewed contact index when app goes to background
             UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
+        }
+        .onChange(of: showingContactDetail) { _, isShowing in
+            // When not showing contact detail (i.e., on favorites screen), set index to -1
+            if !isShowing && hasLoadedInitialIndex {
+                lastViewedContactIndex = -1
+                print("🔍 On favorites screen, set lastViewedContactIndex to -1")
+                // Save -1 to UserDefaults when on favorites screen
+                UserDefaults.standard.set(-1, forKey: lastViewedContactKey)
+            }
         }
     }
     
