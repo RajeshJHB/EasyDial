@@ -440,6 +440,23 @@ struct AddToFavoritesView: View {
     var body: some View {
         NavigationStack {
             VStack {
+                // Selection counter
+                if !selectedContacts.isEmpty {
+                    HStack {
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.yellow)
+                        Text("\(selectedContacts.count) contact\(selectedContacts.count == 1 ? "" : "s") selected")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                }
+                
                 if searchText.isEmpty {
                     Text("Select a contact to add to favorites")
                         .font(.headline)
