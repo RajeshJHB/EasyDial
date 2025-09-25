@@ -1147,7 +1147,7 @@ struct PhotoPickerSection: View {
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let uiImage = UIImage(data: data) {
-                    let resized = resizeImage(uiImage, maxDimension: 256)
+                    let resized = resizeImage(uiImage, maxDimension: 512)
                     if let jpeg = resized.jpegData(compressionQuality: 0.85) {
                         DispatchQueue.main.async {
                             favorite.customImageData = jpeg
@@ -1230,7 +1230,9 @@ struct ContactDetailView: View {
                                             currentIndex = contactsManager.favorites.count - 1
                                         }
                                     }) {
-                                        Text("")
+                                        Image(systemName: "chevron.left")
+                                            .font(.title2)
+                                            .foregroundColor(.gray)
                                             .frame(width: 80, height: 160)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 16)
@@ -1250,7 +1252,9 @@ struct ContactDetailView: View {
                                             currentIndex = 0
                                         }
                                     }) {
-                                        Text("")
+                                        Image(systemName: "chevron.right")
+                                            .font(.title2)
+                                            .foregroundColor(.gray)
                                             .frame(width: 80, height: 160)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 16)
