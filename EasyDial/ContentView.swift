@@ -175,7 +175,7 @@ struct ContentView: View {
         .onAppear {
             contactsManager.requestAccess()
         }
-        .onChange(of: contactsManager.favorites) { _ in
+        .onChange(of: contactsManager.favorites) {
             // Load the last viewed contact index from UserDefaults when contacts are loaded
             let savedIndex = UserDefaults.standard.integer(forKey: lastViewedContactKey)
             print("🔍 Loading saved index: \(savedIndex), favorites count: \(contactsManager.favorites.count)")
@@ -332,7 +332,7 @@ struct FavoriteContactRow: View {
         .sheet(isPresented: $showingConfig) {
             CommunicationConfigView(favorite: $favorite, contactsManager: contactsManager)
         }
-        .onChange(of: favorite.customImageData) { _, _ in
+        .onChange(of: favorite.customImageData) {
             // Save favorites when custom image data changes
             contactsManager.saveFavorites()
         }
@@ -1284,7 +1284,7 @@ struct ContactDetailView: View {
                 }
             }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-        .onChange(of: currentIndex) { newIndex in
+        .onChange(of: currentIndex) { _, newIndex in
             onIndexChanged(newIndex)
         }
         // DEBUG: Large obvious navigation buttons
