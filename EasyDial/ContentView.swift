@@ -95,6 +95,8 @@ struct ContentView: View {
     @State private var isEditMode = false
     @State private var currentContactIndex = 0
     @State private var showingContactDetail = false
+    @State private var lastViewedContactIndex = 0
+    private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
         NavigationStack {
@@ -124,18 +126,14 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        NavigationLink(destination: ContactDetailView(
-                            favorite: Binding(
-                                get: { contactsManager.favorites[0] },
-                                set: { _ in }
-                            ),
-                            contactsManager: contactsManager
-                        )) {
-                            Text("Easy Dial")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.blue)
+                        Button("Easy Dial") {
+                            // Use the current session's lastViewedContactIndex, not the saved one
+                            print("🔍 Easy Dial button pressed, using lastViewedContactIndex: \(lastViewedContactIndex)")
+                            showingContactDetail = true
                         }
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
                         .disabled(contactsManager.favorites.isEmpty)
                     }
                 }
@@ -155,19 +153,41 @@ struct ContentView: View {
                 AddToFavoritesView(contactsManager: contactsManager)
             }
             .fullScreenCover(isPresented: $showingContactDetail) {
-                if currentContactIndex < contactsManager.favorites.count {
+                if lastViewedContactIndex < contactsManager.favorites.count {
+                    let _ = print("🔍 Creating ContactDetailView with lastViewedContactIndex: \(lastViewedContactIndex)")
                     ContactDetailView(
                         favorite: Binding(
-                            get: { contactsManager.favorites[currentContactIndex] },
+                            get: { contactsManager.favorites[lastViewedContactIndex] },
                             set: { _ in }
                         ),
-                        contactsManager: contactsManager
+                        contactsManager: contactsManager,
+                        initialIndex: lastViewedContactIndex,
+                        onIndexChanged: { newIndex in
+                            lastViewedContactIndex = newIndex
+                            // Save to UserDefaults whenever the index changes
+                            UserDefaults.standard.set(newIndex, forKey: lastViewedContactKey)
+                        }
                     )
                 }
             }
         }
         .onAppear {
             contactsManager.requestAccess()
+        }
+        .onChange(of: contactsManager.favorites) { _ in
+            // Load the last viewed contact index from UserDefaults when contacts are loaded
+            let savedIndex = UserDefaults.standard.integer(forKey: lastViewedContactKey)
+            print("🔍 Loading saved index: \(savedIndex), favorites count: \(contactsManager.favorites.count)")
+            if savedIndex >= 0 && savedIndex < contactsManager.favorites.count {
+                lastViewedContactIndex = savedIndex
+                print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
+            } else {
+                print("🔍 Saved index \(savedIndex) is invalid, keeping default: \(lastViewedContactIndex)")
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            // Save the last viewed contact index when app goes to background
+            UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
         }
     }
     
@@ -1165,17 +1185,15 @@ struct ContactDetailView: View {
     @ObservedObject var contactsManager: ContactsManager
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int = 0
+    let onIndexChanged: (Int) -> Void
     
-    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager) {
+    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager, initialIndex: Int = 0, onIndexChanged: @escaping (Int) -> Void = { _ in }) {
         self._favorite = favorite
         self.contactsManager = contactsManager
-        // Find the current index of this favorite
-        if let index = contactsManager.favorites.firstIndex(where: { $0.id == favorite.wrappedValue.id }) {
-            self._currentIndex = State(initialValue: index)
-            print("🔍 ContactDetailView init: Starting at index \(index) of \(contactsManager.favorites.count)")
-        } else {
-            print("🔍 ContactDetailView init: Could not find favorite in list!")
-        }
+        self.onIndexChanged = onIndexChanged
+        // Use the provided initial index instead of finding it
+        self._currentIndex = State(initialValue: initialIndex)
+        print("🔍 ContactDetailView init: Starting at provided index \(initialIndex) of \(contactsManager.favorites.count)")
     }
     
     var body: some View {
@@ -1199,6 +1217,9 @@ struct ContactDetailView: View {
                 }
             }
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        .onChange(of: currentIndex) { newIndex in
+            onIndexChanged(newIndex)
+        }
         // DEBUG: Large obvious navigation buttons
         .overlay(alignment: .bottom) {
             VStack {
@@ -1214,15 +1235,12 @@ struct ContactDetailView: View {
                                             currentIndex = contactsManager.favorites.count - 1
                                         }
                                     }) {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                .frame(width: 80, height: 160)
-                                            
-                                            Image(systemName: "chevron.left")
-                                                .font(.title)
-                                                .foregroundColor(.gray.opacity(0.3))
-                                        }
+                                        Text("")
+                                            .frame(width: 80, height: 160)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
                                     }
                     .accessibilityLabel("Previous contact")
                     
@@ -1237,15 +1255,12 @@ struct ContactDetailView: View {
                                             currentIndex = 0
                                         }
                                     }) {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                                                .frame(width: 80, height: 160)
-                                            
-                                            Image(systemName: "chevron.right")
-                                                .font(.title)
-                                                .foregroundColor(.gray.opacity(0.3))
-                                        }
+                                        Text("")
+                                            .frame(width: 80, height: 160)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            )
                                     }
                     .accessibilityLabel("Next contact")
                 }
@@ -1323,35 +1338,33 @@ struct ContactDetailPage: View {
                 Button(action: {
                     // This would open settings - for now just a placeholder
                 }) {
-                    HStack(spacing: 16) {
-                        VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        VStack(spacing: 2) {
                             Image(systemName: favorite.communicationMethod.iconName)
-                                .font(.title2)
+                                .font(.title3)
                                 .foregroundColor(.blue)
                             Text(favorite.communicationMethod.displayName)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                         
                         Image(systemName: "arrow.right")
-                            .font(.body)
+                            .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        VStack(spacing: 4) {
+                        VStack(spacing: 2) {
                             Image(systemName: favorite.communicationApp.iconName)
-                                .font(.title2)
+                                .font(.title3)
                                 .foregroundColor(.green)
                             Text(favorite.communicationApp.displayName)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(Color(.systemGray6))
-                    .cornerRadius(12)
+                    .cornerRadius(8)
                 }
                 .padding(.horizontal)
                 
