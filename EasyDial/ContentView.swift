@@ -116,7 +116,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if !contactsManager.favorites.isEmpty {
-                        Button(isEditMode ? "Done" : "Edit") {
+                        Button(isEditMode ? "Done" : "Add & Edit") {
                             withAnimation {
                                 isEditMode.toggle()
                             }
@@ -127,7 +127,7 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        Button("Enter Easy Dial") {
+                        Button(">>Easy Dial<<") {
                             // If currently -1, change to 0, otherwise keep current value
                             if lastViewedContactIndex == -1 {
                                 lastViewedContactIndex = 0
@@ -1474,19 +1474,12 @@ struct ContactDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: {
-                    // Single tap - do nothing (prevent accidental dismissal)
+                    dismiss()
                 }) {
                     Text("Home")
                         .font(.headline)
                         .foregroundColor(.blue)
                 }
-                .simultaneousGesture(
-                    TapGesture(count: 2)
-                        .onEnded {
-                            // Double tap - go home
-                            dismiss()
-                        }
-                )
             }
             
             ToolbarItem(placement: .principal) {
