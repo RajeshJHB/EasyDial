@@ -97,6 +97,9 @@ struct ContentView: View {
     @State private var showingContactDetail = false
     @State private var lastViewedContactIndex = 0
     @State private var hasLoadedInitialIndex = false
+    @State private var showingInfoMenu = false
+    @State private var showingHelp = false
+    @State private var showingAbout = false
     private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
@@ -145,14 +148,24 @@ struct ContentView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if isEditMode {
-                        Button {
-                            showingAddToFavorites = true
-                        } label: {
-                            Image(systemName: "plus")
+                    HStack {
+                        if isEditMode {
+                            Button {
+                                showingAddToFavorites = true
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .accessibilityLabel("Add to favorites")
+                            .padding(.trailing, 8)
                         }
-                        .accessibilityLabel("Add to favorites")
-                        .padding(.trailing, 8)
+                        
+                        Button(action: {
+                            showingInfoMenu = true
+                        }) {
+                            Image(systemName: "info.circle")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                        }
                     }
                 }
             }
@@ -177,6 +190,44 @@ struct ContentView: View {
                         }
                     )
                 }
+            }
+            .actionSheet(isPresented: $showingInfoMenu) {
+                ActionSheet(
+                    title: Text("Easy Dial"),
+                    message: Text("Choose an option"),
+                    buttons: [
+                        .default(Text("Help")) {
+                            showingHelp = true
+                        },
+                        .default(Text("Donate")) {
+                            // Open donation link
+                            if let url = URL(string: "https://paypal.me/easydial") {
+                                UIApplication.shared.open(url)
+                            }
+                        },
+                        .default(Text("Version")) {
+                            // Show version info
+                            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+                            let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
+                            alert.addAction(UIAlertAction(title: "OK", style: .default))
+                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                               let window = windowScene.windows.first {
+                                window.rootViewController?.present(alert, animated: true)
+                            }
+                        },
+                        .default(Text("About")) {
+                            showingAbout = true
+                        },
+                        .cancel()
+                    ]
+                )
+            }
+            .sheet(isPresented: $showingHelp) {
+                HelpView()
+            }
+            .sheet(isPresented: $showingAbout) {
+                AboutView()
             }
         }
         .onAppear {
@@ -1382,6 +1433,9 @@ struct ContactDetailView: View {
     @ObservedObject var contactsManager: ContactsManager
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int = 0
+    @State private var showingInfoMenu = false
+    @State private var showingHelp = false
+    @State private var showingAbout = false
     let onIndexChanged: (Int) -> Void
     
     init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager, initialIndex: Int = 0, onIndexChanged: @escaping (Int) -> Void = { _ in }) {
@@ -1487,6 +1541,54 @@ struct ContactDetailView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
             }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showingInfoMenu = true
+                }) {
+                    Image(systemName: "info.circle")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+        .actionSheet(isPresented: $showingInfoMenu) {
+            ActionSheet(
+                title: Text("Easy Dial"),
+                message: Text("Choose an option"),
+                buttons: [
+                    .default(Text("Help")) {
+                        showingHelp = true
+                    },
+                    .default(Text("Donate")) {
+                        // Open donation link
+                        if let url = URL(string: "https://paypal.me/easydial") {
+                            UIApplication.shared.open(url)
+                        }
+                    },
+                    .default(Text("Version")) {
+                        // Show version info
+                        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+                        let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                           let window = windowScene.windows.first {
+                            window.rootViewController?.present(alert, animated: true)
+                        }
+                    },
+                    .default(Text("About")) {
+                        showingAbout = true
+                    },
+                    .cancel()
+                ]
+            )
+        }
+        .sheet(isPresented: $showingHelp) {
+            HelpView()
+        }
+        .sheet(isPresented: $showingAbout) {
+            AboutView()
         }
         }
     }
@@ -1666,6 +1768,154 @@ struct ContactDetailPage: View {
                 ]
                 UIApplication.shared.open(url, options: options) { success in
                     print("🔍 Method communication URL opened successfully: \(success)")
+                }
+            }
+        }
+    }
+}
+
+/// Help view with useful tips for the app
+struct HelpView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Easy Dial Help")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .padding(.bottom)
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        HelpSection(
+                            title: "Getting Started",
+                            content: "• Add contacts to favorites from your phone's contact list\n• Tap 'Add & Edit' to manage your favorites\n• Use '>>Easy Dial<<' to enter the quick dial mode"
+                        )
+                        
+                        HelpSection(
+                            title: "Easy Dial Mode",
+                            content: "• Swipe left/right to navigate between contacts\n• Tap the contact photo to make a call\n• Tap the call button for voice calls\n• Use the Home button to return to favorites"
+                        )
+                        
+                        HelpSection(
+                            title: "Customizing Contacts",
+                            content: "• Tap the gear icon in edit mode to configure each contact\n• Choose your preferred communication method (Voice/Video/Text)\n• Select which app to use (Phone, WhatsApp, FaceTime, etc.)\n• Add custom photos for contacts"
+                        )
+                        
+                        HelpSection(
+                            title: "Navigation Tips",
+                            content: "• Swipe gestures work on the entire screen\n• Large invisible tap areas on left/right for easy navigation\n• Double-tap gestures are not required\n• The app remembers your last viewed contact"
+                        )
+                        
+                        HelpSection(
+                            title: "Supported Apps",
+                            content: "• Phone (native iOS calls)\n• WhatsApp (voice, video, text)\n• FaceTime (video calls)\n• Messages (SMS)\n• Telegram, Signal, Viber (text messaging)"
+                        )
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Help")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Help section component
+struct HelpSection: View {
+    let title: String
+    let content: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.blue)
+            
+            Text(content)
+                .font(.body)
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+/// About view with app information
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 30) {
+                Spacer()
+                
+                Image(systemName: "phone.circle.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
+                
+                VStack(spacing: 10) {
+                    Text("Easy Dial")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Quick Access to Your Favorite Contacts")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                VStack(spacing: 15) {
+                    Text("Version 1.0")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                    
+                    Text("Made with ❤️ for easy communication")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 10) {
+                    Text("Features:")
+                        .font(.headline)
+                        .foregroundColor(.blue)
+                    
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("• Quick dial interface")
+                        Text("• Swipe navigation")
+                        Text("• Multiple communication apps")
+                        Text("• Custom contact photos")
+                        Text("• Favorite management")
+                    }
+                    .font(.body)
+                    .foregroundColor(.primary)
+                }
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(8)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("About")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
                 }
             }
         }
