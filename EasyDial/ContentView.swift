@@ -162,85 +162,15 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if contactsManager.isLoading {
+                if contactsManager.favorites.isEmpty && contactsManager.isLoadingContactsInBackground {
                     ProgressView("Loading contacts...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if contactsManager.favorites.isEmpty {
                     emptyStateView
-                } else {
-                    favoritesListView
-                }
-            }
-            .navigationTitle("Favorites")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !contactsManager.favorites.isEmpty {
-                        Button(isEditMode ? "Done" : "Add & Edit") {
-                            withAnimation {
-                                isEditMode.toggle()
-                            }
-                        }
-                        .accessibilityLabel(isEditMode ? "Exit edit mode" : "Enter edit mode")
-                    }
-                }
-                
-                ToolbarItem(placement: .principal) {
-                    if !contactsManager.favorites.isEmpty && !isEditMode {
-                        Button("My Dial") {
-                            // If currently -1, change to 0, otherwise keep current value
-                            if lastViewedContactIndex == -1 {
-                                lastViewedContactIndex = 0
-                                print("🔍 My Dial button pressed, changed lastViewedContactIndex from -1 to 0")
-                            } else {
-                                print("🔍 My Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
-                            }
-                            showingContactDetail = true
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.gray.opacity(0.2))
-                        .foregroundColor(.primary)
-                        .cornerRadius(8)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .disabled(contactsManager.favorites.isEmpty)
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack {
-                        if isEditMode {
-                            Button {
-                                showingAddToFavorites = true
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                            .accessibilityLabel("Add to favorites")
-                            .padding(.trailing, 8)
-                        }
-                        
-                        Button(action: {
-                            showingInfoMenu = true
-                        }) {
-                            Image(systemName: "info.circle")
-                                .font(.title2)
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAddToFavorites) {
-                AddToFavoritesView(contactsManager: contactsManager)
-            }
-            .fullScreenCover(isPresented: $showingContactDetail) {
-                if lastViewedContactIndex >= 0 && lastViewedContactIndex < contactsManager.favorites.count {
-                    let _ = print("🔍 Creating ContactDetailView with lastViewedContactIndex: \(lastViewedContactIndex)")
-                    ContactDetailView(
-                        favorite: Binding(
-                            get: { contactsManager.favorites[lastViewedContactIndex] },
-                            set: { _ in }
-                        ),
+                } else if hasLoadedInitialIndex && lastViewedContactIndex != -1 && !showingContactDetail {
+                    // Show contact detail view directly if we have a valid lastViewedContactIndex
+                    ContactDetailViewDirect(
+                        favorites: contactsManager.favorites,
                         contactsManager: contactsManager,
                         initialIndex: lastViewedContactIndex,
                         onIndexChanged: { newIndex in
@@ -281,43 +211,86 @@ struct ContentView: View {
                             
                             UserDefaults.standard.set(newIndex, forKey: lastViewedContactKey)
                             print("✅ Saved lastViewedContactIndex: \(newIndex)")
+                        },
+                        onReturnToFavorites: {
+                            // Return to favorites view
+                            lastViewedContactIndex = -1
+                            UserDefaults.standard.set(-1, forKey: lastViewedContactKey)
+                            print("🔍 Returned to favorites view")
                         }
                     )
+                } else {
+                    favoritesListView
                 }
             }
-            .actionSheet(isPresented: $showingInfoMenu) {
-                ActionSheet(
-                    title: Text("My Dial"),
-                    message: Text("Choose an option"),
-                    buttons: [
-                        .default(Text("Help")) {
-                            showingHelp = true
-                        },
-                        .default(Text("Donate")) {
-                            // Open donation link
-                            if let url = URL(string: "https://paypal.me/easydial") {
-                                UIApplication.shared.open(url)
+            .navigationTitle("Favorites")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if !contactsManager.favorites.isEmpty {
+                        Button(isEditMode ? "Done" : "Add & Edit") {
+                            withAnimation {
+                                isEditMode.toggle()
                             }
-                        },
-                        .default(Text("Version")) {
-                            // Show version info
-                            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-                            let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
-                            alert.addAction(UIAlertAction(title: "OK", style: .default))
-                            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                               let window = windowScene.windows.first {
-                                window.rootViewController?.present(alert, animated: true)
+                        }
+                        .accessibilityLabel(isEditMode ? "Exit edit mode" : "Enter edit mode")
+                    }
+                }
+                
+                ToolbarItem(placement: .principal) {
+                    if !contactsManager.favorites.isEmpty && !isEditMode {
+                        Button("My Dial") {
+                            // If currently -1, change to 0, otherwise keep current value
+                            if lastViewedContactIndex == -1 {
+                                lastViewedContactIndex = 0
+                                print("🔍 My Dial button pressed, changed lastViewedContactIndex from -1 to 0")
+                                // The view will automatically update to show the contact detail view
+                                // since lastViewedContactIndex is now != -1
+                            } else {
+                                print("🔍 My Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
                             }
-                        },
-                        .default(Text("About")) {
-                            showingAbout = true
-                        },
-                        .default(Text("Suggestions")) {
-                            showingSuggestions = true
-                        },
-                        .cancel()
-                    ]
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.gray.opacity(0.2))
+                        .foregroundColor(.primary)
+                        .cornerRadius(8)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .disabled(contactsManager.favorites.isEmpty)
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack {
+                        if isEditMode {
+                            Button {
+                                showingAddToFavorites = true
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .accessibilityLabel("Add to favorites")
+                            .padding(.trailing, 8)
+                        }
+                        
+                        Button(action: {
+                            showingInfoMenu = true
+                        }) {
+                            Image(systemName: "info.circle")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddToFavorites) {
+                AddToFavoritesView(contactsManager: contactsManager)
+            }
+            .sheet(isPresented: $showingInfoMenu) {
+                InfoMenuView(
+                    showingHelp: $showingHelp,
+                    showingAbout: $showingAbout,
+                    showingSuggestions: $showingSuggestions
                 )
             }
             .sheet(isPresented: $showingHelp) {
@@ -331,7 +304,13 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            contactsManager.requestAccess()
+            // Load favorites first (fast) to show the page immediately
+            contactsManager.loadFavorites()
+            
+            // Load contacts in background after page is displayed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                contactsManager.requestAccess()
+            }
         }
         .onChange(of: contactsManager.favorites) {
             // Load the last viewed contact index from UserDefaults when contacts are loaded
@@ -346,18 +325,12 @@ struct ContentView: View {
                 lastViewedContactIndex = savedIndex
                 print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
                 
-                // Auto-navigate to contact page ONLY on initial load (not when contacts are deleted/modified)
-                if !hasLoadedInitialIndex && lastViewedContactIndex != -1 {
-                    print("🔍 Initial load - Auto-navigating to contact page with index: \(lastViewedContactIndex)")
-                    // Use DispatchQueue to ensure state is updated before showing the cover
-                    DispatchQueue.main.async {
-                        showingContactDetail = true
-                    }
-                }
+                // Note: The contact detail view will be shown directly in the main view
+                // if lastViewedContactIndex != -1, no need for separate navigation
             } else {
-                // Invalid saved index - set to -1 if no contacts, otherwise 0
-                lastViewedContactIndex = contactsManager.favorites.isEmpty ? -1 : 0
-                print("🔍 Saved index \(savedIndex) is invalid, set lastViewedContactIndex to: \(lastViewedContactIndex)")
+                // Invalid saved index - keep at -1 to show favorites page
+                lastViewedContactIndex = -1
+                print("🔍 Saved index \(savedIndex) is invalid, keeping lastViewedContactIndex at -1 to show favorites page")
             }
             
             // Mark that we've loaded the initial index
@@ -366,15 +339,6 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // Save the last viewed contact index when app goes to background
             UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
-        }
-        .onChange(of: showingContactDetail) { _, isShowing in
-            // When not showing contact detail (i.e., on favorites screen), set index to -1
-            if !isShowing && hasLoadedInitialIndex {
-                lastViewedContactIndex = -1
-                print("🔍 On favorites screen, set lastViewedContactIndex to -1")
-                // Save -1 to UserDefaults when on favorites screen
-                UserDefaults.standard.set(-1, forKey: lastViewedContactKey)
-            }
         }
     }
     
@@ -412,6 +376,21 @@ struct ContentView: View {
             }
             .onDelete(perform: isEditMode ? deleteFavorites : nil)
             .onMove(perform: isEditMode ? moveFavorites : nil)
+            
+            // Show subtle loading indicator if contacts are loading in background
+            if contactsManager.isLoadingContactsInBackground {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Loading contacts...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.plain)
         .environment(\.editMode, isEditMode ? .constant(.active) : .constant(.inactive))
@@ -1048,6 +1027,7 @@ class ContactsManager: ObservableObject {
     @Published var favorites: [FavoriteContact] = []
     @Published var allContacts: [CNContact] = []
     @Published var isLoading = false
+    @Published var isLoadingContactsInBackground = false
     
     private let store = CNContactStore()
     
@@ -1057,7 +1037,17 @@ class ContactsManager: ObservableObject {
             DispatchQueue.main.async {
                 if granted {
                     self?.loadContacts()
-                    self?.loadFavorites()
+                    
+                    // Check if we need to migrate old favorites format
+                    if let data = UserDefaults.standard.data(forKey: "favorites") {
+                        if data.count > 4 * 1024 * 1024 {
+                            print("🚨 Migrating large favorites data now that contact access is granted...")
+                            self?.migrateOldFavorites(from: data)
+                        } else if (try? JSONDecoder().decode([FavoriteContact].self, from: data)) == nil {
+                            print("🔄 Migrating old favorites format now that contact access is granted...")
+                            self?.migrateOldFavorites(from: data)
+                        }
+                    }
                 } else {
                     print("Contacts access denied: \(error?.localizedDescription ?? "Unknown error")")
                 }
@@ -1067,7 +1057,7 @@ class ContactsManager: ObservableObject {
     
     /// Loads all contacts from the device
     private func loadContacts() {
-        isLoading = true
+        isLoadingContactsInBackground = true
         
         let request = CNContactFetchRequest(keysToFetch: [
             CNContactGivenNameKey as CNKeyDescriptor,
@@ -1077,49 +1067,55 @@ class ContactsManager: ObservableObject {
             CNContactThumbnailImageDataKey as CNKeyDescriptor
         ])
         
-        var contacts: [CNContact] = []
-        
-        do {
-            try store.enumerateContacts(with: request) { contact, _ in
-                contacts.append(contact)
-            }
+        // Move contact enumeration to background thread to avoid blocking UI
+        DispatchQueue.global(qos: .userInitiated).async {
+            var contacts: [CNContact] = []
             
-            DispatchQueue.main.async {
-                self.allContacts = contacts.sorted { contact1, contact2 in
+            do {
+                try self.store.enumerateContacts(with: request) { contact, _ in
+                    contacts.append(contact)
+                }
+                
+                // Sort contacts on background thread
+                let sortedContacts = contacts.sorted { contact1, contact2 in
                     let name1 = "\(contact1.givenName) \(contact1.familyName)"
                     let name2 = "\(contact2.givenName) \(contact2.familyName)"
                     return name1.localizedCaseInsensitiveCompare(name2) == .orderedAscending
                 }
-                self.isLoading = false
-            }
-        } catch {
-            DispatchQueue.main.async {
-                self.isLoading = false
-                print("Error loading contacts: \(error.localizedDescription)")
+                
+                // Update UI on main thread
+                DispatchQueue.main.async {
+                    self.allContacts = sortedContacts
+                    self.isLoadingContactsInBackground = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoadingContactsInBackground = false
+                    print("Error loading contacts: \(error.localizedDescription)")
+                }
             }
         }
     }
     
-    /// Loads favorites from UserDefaults
-    private func loadFavorites() {
+    /// Loads favorites from UserDefaults (can be called without contact access)
+    func loadFavorites() {
         if let data = UserDefaults.standard.data(forKey: "favorites") {
             print("🔍 Loading favorites data: \(data.count) bytes")
             if data.count > 4 * 1024 * 1024 {
                 print("🚨 CRITICAL: Existing favorites data exceeds 4MB limit! Forcing migration...")
-                // Force migration by calling migrateOldFavorites
-                migrateOldFavorites(from: data)
+                // Force migration by calling migrateOldFavorites (requires contact access)
+                // This will be called later when contact access is granted
                 return
             }
             // Try to decode with new format first
             if let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
-                // Refetch CNContact for each favorite using stored identifier so image data is present
-                var rebuilt: [FavoriteContact] = []
-                // No need to rebuild favorites since we're not storing CNContact objects anymore
-                rebuilt = favorites
-                self.favorites = rebuilt
+                // Load favorites immediately without requiring contact access
+                self.favorites = favorites
+                print("✅ Loaded \(favorites.count) favorites from storage")
             } else {
-                // Try to migrate from old format
-                migrateOldFavorites(from: data)
+                // Try to migrate from old format (requires contact access)
+                // This will be called later when contact access is granted
+                print("⚠️ Old format detected, will migrate when contact access is granted")
             }
         }
     }
@@ -1900,39 +1896,11 @@ struct ContactDetailView: View {
                 }
             }
         }
-        .actionSheet(isPresented: $showingInfoMenu) {
-            ActionSheet(
-                title: Text("My Dial"),
-                message: Text("Choose an option"),
-                buttons: [
-                    .default(Text("Help")) {
-                        showingHelp = true
-                    },
-                    .default(Text("Donate")) {
-                        // Open donation link
-                        if let url = URL(string: "https://paypal.me/easydial") {
-                            UIApplication.shared.open(url)
-                        }
-                    },
-                    .default(Text("Version")) {
-                        // Show version info
-                        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-                        let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
-                        alert.addAction(UIAlertAction(title: "OK", style: .default))
-                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let window = windowScene.windows.first {
-                            window.rootViewController?.present(alert, animated: true)
-                        }
-                    },
-                    .default(Text("About")) {
-                        showingAbout = true
-                    },
-                    .default(Text("Suggestions")) {
-                        showingSuggestions = true
-                    },
-                    .cancel()
-                ]
+        .sheet(isPresented: $showingInfoMenu) {
+            InfoMenuView(
+                showingHelp: $showingHelp,
+                showingAbout: $showingAbout,
+                showingSuggestions: $showingSuggestions
             )
         }
         .sheet(isPresented: $showingHelp) {
@@ -2385,6 +2353,256 @@ struct SuggestionView: View {
         } else {
             emailAlertMessage = "Could not create email. Please contact us at developer@mydialapp.com"
             showingEmailAlert = true
+        }
+    }
+}
+
+/// Info menu view that replaces ActionSheet
+struct InfoMenuView: View {
+    @Binding var showingHelp: Bool
+    @Binding var showingAbout: Bool
+    @Binding var showingSuggestions: Bool
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Button(action: {
+                    dismiss()
+                    showingHelp = true
+                }) {
+                    HStack {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(.blue)
+                        Text("Help")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    dismiss()
+                    if let url = URL(string: "https://paypal.me/easydial") {
+                        UIApplication.shared.open(url)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(.red)
+                        Text("Donate")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    dismiss()
+                    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+                    let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        window.rootViewController?.present(alert, animated: true)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.blue)
+                        Text("Version")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    dismiss()
+                    showingAbout = true
+                }) {
+                    HStack {
+                        Image(systemName: "person.circle")
+                            .foregroundColor(.blue)
+                        Text("About")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Button(action: {
+                    dismiss()
+                    showingSuggestions = true
+                }) {
+                    HStack {
+                        Image(systemName: "lightbulb")
+                            .foregroundColor(.yellow)
+                        Text("Suggestions")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .navigationTitle("My Dial")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Direct contact detail view that works with favorites array instead of single favorite binding
+struct ContactDetailViewDirect: View {
+    let favorites: [FavoriteContact]
+    @ObservedObject var contactsManager: ContactsManager
+    @State private var currentIndex: Int = 0
+    @State private var showingInfoMenu = false
+    @State private var showingHelp = false
+    @State private var showingAbout = false
+    @State private var showingSuggestions = false
+    let onIndexChanged: (Int) -> Void
+    let onReturnToFavorites: () -> Void
+    
+    init(favorites: [FavoriteContact], contactsManager: ContactsManager, initialIndex: Int = 0, onIndexChanged: @escaping (Int) -> Void = { _ in }, onReturnToFavorites: @escaping () -> Void) {
+        self.favorites = favorites
+        self.contactsManager = contactsManager
+        self.onIndexChanged = onIndexChanged
+        self.onReturnToFavorites = onReturnToFavorites
+        self._currentIndex = State(initialValue: initialIndex)
+        print("🔍 ContactDetailViewDirect init: Starting at provided index \(initialIndex) of \(favorites.count)")
+    }
+    
+    var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                // Navigation bar with Home button
+                HStack {
+                    Button(action: onReturnToFavorites) {
+                        HStack {
+                            Image(systemName: "house.fill")
+                            Text("Home")
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(8)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: { 
+                        print("🔍 INFO BUTTON TAPPED!")
+                        print("🔍 Before: showingInfoMenu = \(showingInfoMenu)")
+                        showingInfoMenu = true 
+                        print("🔍 After: showingInfoMenu = \(showingInfoMenu)")
+                    }) {
+                        Image(systemName: "info.circle")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .zIndex(1) // Ensure navigation bar is on top
+                
+                // TabView for swiping between contacts (same as original ContactDetailView)
+                TabView(selection: $currentIndex) {
+                    ForEach(Array(favorites.enumerated()), id: \.element.id) { index, fav in
+                        ContactDetailPage(
+                            favorite: Binding(
+                                get: { fav },
+                                set: { _ in }
+                            ),
+                            contactsManager: contactsManager,
+                            onHomeTapped: onReturnToFavorites
+                        )
+                        .tag(index)
+                        .onAppear {
+                            print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
+                        }
+                    }
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                .onChange(of: currentIndex) { _, newIndex in
+                    onIndexChanged(newIndex)
+                }
+            }
+            
+            // DEBUG: Large obvious navigation buttons - positioned at bottom only
+            VStack {
+                Spacer()
+                
+                HStack {
+                    // Left navigation button (previous) - DEBUG VERSION
+                    Button(action: {
+                        if currentIndex > 0 {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                currentIndex -= 1
+                            }
+                        }
+                    }) {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 120, height: 200)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(currentIndex == 0)
+                    
+                    Spacer()
+                    
+                    // Right navigation button (next) - DEBUG VERSION
+                    Button(action: {
+                        if currentIndex < favorites.count - 1 {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                currentIndex += 1
+                            }
+                        }
+                    }) {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 120, height: 200)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(currentIndex == favorites.count - 1)
+                }
+                .frame(height: 200)
+            }
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showingInfoMenu) {
+            InfoMenuView(
+                showingHelp: $showingHelp,
+                showingAbout: $showingAbout,
+                showingSuggestions: $showingSuggestions
+            )
+        }
+        .sheet(isPresented: $showingHelp) {
+            HelpView()
+        }
+        .sheet(isPresented: $showingAbout) {
+            AboutView()
+        }
+        .sheet(isPresented: $showingSuggestions) {
+            SuggestionView()
         }
     }
 }
