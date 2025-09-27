@@ -100,6 +100,7 @@ struct ContentView: View {
     @State private var showingInfoMenu = false
     @State private var showingHelp = false
     @State private var showingAbout = false
+    @State private var showingSuggestions = false
     private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
@@ -219,6 +220,9 @@ struct ContentView: View {
                         .default(Text("About")) {
                             showingAbout = true
                         },
+                        .default(Text("Suggestions")) {
+                            showingSuggestions = true
+                        },
                         .cancel()
                     ]
                 )
@@ -228,6 +232,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingAbout) {
                 AboutView()
+            }
+            .sheet(isPresented: $showingSuggestions) {
+                SuggestionView()
             }
         }
         .onAppear {
@@ -1436,6 +1443,7 @@ struct ContactDetailView: View {
     @State private var showingInfoMenu = false
     @State private var showingHelp = false
     @State private var showingAbout = false
+    @State private var showingSuggestions = false
     let onIndexChanged: (Int) -> Void
     
     init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager, initialIndex: Int = 0, onIndexChanged: @escaping (Int) -> Void = { _ in }) {
@@ -1580,6 +1588,9 @@ struct ContactDetailView: View {
                     .default(Text("About")) {
                         showingAbout = true
                     },
+                    .default(Text("Suggestions")) {
+                        showingSuggestions = true
+                    },
                     .cancel()
                 ]
             )
@@ -1589,6 +1600,9 @@ struct ContactDetailView: View {
         }
         .sheet(isPresented: $showingAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showingSuggestions) {
+            SuggestionView()
         }
         }
     }
@@ -1918,6 +1932,119 @@ struct AboutView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Suggestion view for user feedback
+struct SuggestionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var suggestionText = ""
+    @State private var showingEmailAlert = false
+    @State private var emailAlertMessage = ""
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Text("We'd love to hear your suggestions!")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                    .multilineTextAlignment(.center)
+                    .padding(.top)
+                
+                Text("Help us improve My Dial by sharing your ideas, bug reports, or feature requests.")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your Suggestion:")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    TextEditor(text: $suggestionText)
+                        .frame(minHeight: 150)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .padding(.horizontal)
+                
+                if suggestionText.isEmpty {
+                    Text("Please enter your suggestion above")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button(action: sendSuggestion) {
+                    HStack {
+                        Image(systemName: "envelope.fill")
+                        Text("Send Suggestion")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(suggestionText.isEmpty ? Color.gray.opacity(0.3) : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .disabled(suggestionText.isEmpty)
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+            .navigationTitle("Suggestions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .alert("Email Sent", isPresented: $showingEmailAlert) {
+            Button("OK") {
+                if emailAlertMessage.contains("successfully") {
+                    dismiss()
+                }
+            }
+        } message: {
+            Text(emailAlertMessage)
+        }
+    }
+    
+    private func sendSuggestion() {
+        let subject = "My Dial App Suggestion"
+        let body = """
+        Suggestion: \(suggestionText)
+        
+        ---
+        Sent from My Dial iOS App
+        """
+        
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        
+        if let url = URL(string: "mailto:developer@mydialapp.com?subject=\(encodedSubject)&body=\(encodedBody)") {
+            UIApplication.shared.open(url) { success in
+                DispatchQueue.main.async {
+                    if success {
+                        emailAlertMessage = "Email app opened successfully! Please send your suggestion."
+                    } else {
+                        emailAlertMessage = "Could not open email app. Please contact us at developer@mydialapp.com"
+                    }
+                    showingEmailAlert = true
+                }
+            }
+        } else {
+            emailAlertMessage = "Could not create email. Please contact us at developer@mydialapp.com"
+            showingEmailAlert = true
         }
     }
 }

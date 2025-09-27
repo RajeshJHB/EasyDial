@@ -414,7 +414,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EasyDial/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = "My Dial";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSContactsUsageDescription = "EasyDial needs access to your contacts to display and manage your favorites.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -447,7 +447,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EasyDial/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = "My Dial";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSContactsUsageDescription = "EasyDial needs access to your contacts to display and manage your favorites.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
