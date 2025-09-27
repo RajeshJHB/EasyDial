@@ -10,6 +10,62 @@ import Contacts
 import UIKit
 import PhotosUI
 
+// MARK: - Image Storage Manager
+
+class ImageStorageManager {
+    static let shared = ImageStorageManager()
+    
+    private let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private let imagesDirectory: URL
+    
+    private init() {
+        imagesDirectory = documentsDirectory.appendingPathComponent("ContactImages")
+        createImagesDirectoryIfNeeded()
+    }
+    
+    private func createImagesDirectoryIfNeeded() {
+        if !FileManager.default.fileExists(atPath: imagesDirectory.path) {
+            try? FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        }
+    }
+    
+    func saveImage(_ imageData: Data, for contactId: String) -> String? {
+        let fileName = "\(contactId)_\(UUID().uuidString).jpg"
+        let fileURL = imagesDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try imageData.write(to: fileURL)
+            return fileName
+        } catch {
+            print("Failed to save image: \(error)")
+            return nil
+        }
+    }
+    
+    func loadImage(named fileName: String) -> UIImage? {
+        let fileURL = imagesDirectory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return UIImage(data: data)
+    }
+    
+    func deleteImage(named fileName: String) {
+        let fileURL = imagesDirectory.appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+    
+    func cleanupOrphanedImages(validFileNames: Set<String>) {
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: imagesDirectory.path) else { return }
+        
+        for file in files {
+            if !validFileNames.contains(file) {
+                deleteImage(named: file)
+            }
+        }
+    }
+}
+
 // MARK: - Communication Enums
 
 enum CommunicationMethod: String, CaseIterable, Codable {
@@ -187,7 +243,40 @@ struct ContentView: View {
                             print("🔍 ContactDetailView onIndexChanged: \(newIndex)")
                             lastViewedContactIndex = newIndex
                             // Save to UserDefaults whenever the index changes
+                            print("💾 Saving lastViewedContactIndex: \(newIndex)")
+                            
+                            // Debug: Check if there's already large data in UserDefaults
+                            if let existingData = UserDefaults.standard.data(forKey: "favorites") {
+                                print("⚠️ WARNING: Existing favorites data in UserDefaults: \(existingData.count) bytes")
+                                if existingData.count > 4 * 1024 * 1024 {
+                                    print("🚨 CRITICAL: Existing data exceeds 4MB limit!")
+                                }
+                            }
+                            
+                            // Debug: Check total UserDefaults size before saving
+                            let userDefaults = UserDefaults.standard
+                            let allKeys = userDefaults.dictionaryRepresentation().keys
+                            var totalSize = 0
+                            for key in allKeys {
+                                if let data = userDefaults.data(forKey: key) {
+                                    totalSize += data.count
+                                    if data.count > 100000 { // 100KB
+                                        print("🔍 Large UserDefaults key '\(key)': \(data.count) bytes")
+                                    }
+                                }
+                            }
+                            print("🔍 Total UserDefaults size: \(totalSize) bytes")
+                            
+                            // Check if we need to save favorites with clean data
+                            if let existingData = UserDefaults.standard.data(forKey: "favorites"),
+                               existingData.count > 1000000 { // 1MB threshold
+                                print("🔄 Large favorites data detected (\(existingData.count) bytes), saving clean version...")
+                                // Save favorites with clean data (no large CNContact image data)
+                                contactsManager.saveFavorites()
+                            }
+                            
                             UserDefaults.standard.set(newIndex, forKey: lastViewedContactKey)
+                            print("✅ Saved lastViewedContactIndex: \(newIndex)")
                         }
                     )
                 }
@@ -346,13 +435,13 @@ struct FavoriteContactRow: View {
         self._favorite = favorite
         self.isEditMode = isEditMode
         self.contactsManager = contactsManager
-        print("🔍 FavoriteContactRow created for: \(favorite.wrappedValue.displayName), isEditMode: \(isEditMode)")
+//        print("🔍 FavoriteContactRow created for: //\(favorite.wrappedValue.displayName), isEditMode: \(isEditMode)")
     }
     
     var body: some View {
         HStack(spacing: 16) {
             // Contact photo (uses custom image if set)
-            ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 50)
+            ContactPhotoView(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, size: 50)
             
             // Contact info
             VStack(alignment: .leading, spacing: 4) {
@@ -425,8 +514,8 @@ struct FavoriteContactRow: View {
         .sheet(isPresented: $showingConfig) {
             CommunicationConfigView(favorite: $favorite, contactsManager: contactsManager)
         }
-        .onChange(of: favorite.customImageData) {
-            // Save favorites when custom image data changes
+        .onChange(of: favorite.customImageFileName) {
+            // Save favorites when custom image file name changes
             contactsManager.saveFavorites()
         }
     }
@@ -630,7 +719,7 @@ struct ContactRow: View {
         VStack(spacing: 8) {
             HStack(spacing: 16) {
                 // Contact photo
-                ContactPhotoView(contact: contact, customImageData: .constant(nil), size: 40)
+                ContactPhotoView(contactIdentifier: contact.identifier, contactGivenName: contact.givenName, contactFamilyName: contact.familyName, customImageFileName: .constant(nil), size: 40)
                 
                 // Contact info
                 VStack(alignment: .leading, spacing: 2) {
@@ -755,89 +844,198 @@ struct PhoneNumberRow: View {
 
 /// Reusable view for displaying contact photos with fallback to initials
 struct ContactPhotoView: View {
-    let contact: CNContact
-    @Binding var customImageData: Data?
+    let contactIdentifier: String
+    let contactGivenName: String
+    let contactFamilyName: String
+    @Binding var customImageFileName: String?
     let size: CGFloat
     
-    init(contact: CNContact, customImageData: Binding<Data?>, size: CGFloat = 50) {
-        self.contact = contact
-        self._customImageData = customImageData
+    init(contactIdentifier: String, contactGivenName: String, contactFamilyName: String, customImageFileName: Binding<String?>, size: CGFloat = 50) {
+        self.contactIdentifier = contactIdentifier
+        self.contactGivenName = contactGivenName
+        self.contactFamilyName = contactFamilyName
+        self._customImageFileName = customImageFileName
         self.size = size
     }
     
     var body: some View {
         Group {
-            if let data = customImageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: size, height: size)
-                    .clipShape(Circle())
-            } else if let imageData = contact.thumbnailImageData ?? contact.imageData,
-               let uiImage = UIImage(data: imageData) {
+            if let fileName = customImageFileName, let uiImage = ImageStorageManager.shared.loadImage(named: fileName) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
                     .clipShape(Circle())
             } else {
-                // Fallback to initials
+                // Try to load contact image on-demand if not available
+                ContactImageOnDemandView(contactIdentifier: contactIdentifier, size: size)
+            }
+        }
+        .id("\(contactIdentifier)_\(customImageFileName ?? "")")
+    }
+}
+
+/// View that loads contact images on-demand to avoid large data in memory
+struct ContactImageOnDemandView: View {
+    let contactIdentifier: String
+    let size: CGFloat
+    @State private var contactImage: UIImage?
+    @State private var isLoading = false
+    
+    var body: some View {
+        Group {
+            if let image = contactImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                // Fallback to initials while loading
                 Circle()
                     .fill(Color.blue.opacity(0.1))
                     .frame(width: size, height: size)
                     .overlay {
-                        Text(contact.givenName.prefix(1).uppercased())
+                        Text("?")
                             .font(.system(size: size * 0.4, weight: .medium))
                             .foregroundColor(.blue)
                     }
+                    .onAppear {
+                        loadContactImageOnDemand()
+                    }
             }
         }
-        .id("\(contact.identifier)_\(customImageData?.count ?? 0)")
+    }
+    
+    private func loadContactImageOnDemand() {
+        guard !isLoading else { return }
+        isLoading = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let store = CNContactStore()
+            do {
+                let contact = try store.unifiedContact(withIdentifier: contactIdentifier, keysToFetch: [
+                    CNContactImageDataKey as CNKeyDescriptor,
+                    CNContactThumbnailImageDataKey as CNKeyDescriptor
+                ])
+                
+                if let imageData = contact.thumbnailImageData ?? contact.imageData,
+                   let uiImage = UIImage(data: imageData) {
+                    DispatchQueue.main.async {
+                        self.contactImage = uiImage
+                        self.isLoading = false
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+}
+
+/// Rectangular version of ContactImageOnDemandView for larger displays
+struct ContactImageOnDemandRectangularView: View {
+    let contactIdentifier: String
+    let width: CGFloat
+    let height: CGFloat
+    @State private var contactImage: UIImage?
+    @State private var isLoading = false
+    
+    var body: some View {
+        Group {
+            if let image = contactImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: width, height: height)
+                    .clipped()
+            } else {
+                // Fallback to initials while loading
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: width, height: height)
+                    .overlay {
+                        Text("?")
+                            .font(.system(size: min(width, height) * 0.3, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+                    .onAppear {
+                        loadContactImageOnDemand()
+                    }
+            }
+        }
+    }
+    
+    private func loadContactImageOnDemand() {
+        guard !isLoading else { return }
+        isLoading = true
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let store = CNContactStore()
+            do {
+                let contact = try store.unifiedContact(withIdentifier: contactIdentifier, keysToFetch: [
+                    CNContactImageDataKey as CNKeyDescriptor,
+                    CNContactThumbnailImageDataKey as CNKeyDescriptor
+                ])
+                
+                if let imageData = contact.thumbnailImageData ?? contact.imageData,
+                   let uiImage = UIImage(data: imageData) {
+                    DispatchQueue.main.async {
+                        self.contactImage = uiImage
+                        self.isLoading = false
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
+            }
+        }
     }
 }
 
 /// Rectangular version of ContactPhotoView for larger displays
 struct ContactPhotoViewRectangular: View {
-    let contact: CNContact
-    @Binding var customImageData: Data?
+    let contactIdentifier: String
+    let contactGivenName: String
+    let contactFamilyName: String
+    @Binding var customImageFileName: String?
     let width: CGFloat
     let height: CGFloat
     
-    init(contact: CNContact, customImageData: Binding<Data?>, width: CGFloat, height: CGFloat) {
-        self.contact = contact
-        self._customImageData = customImageData
+    init(contactIdentifier: String, contactGivenName: String, contactFamilyName: String, customImageFileName: Binding<String?>, width: CGFloat, height: CGFloat) {
+        self.contactIdentifier = contactIdentifier
+        self.contactGivenName = contactGivenName
+        self.contactFamilyName = contactFamilyName
+        self._customImageFileName = customImageFileName
         self.width = width
         self.height = height
     }
     
     var body: some View {
         Group {
-            if let data = customImageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: width, height: height)
-                    .clipped()
-            } else if let imageData = contact.thumbnailImageData ?? contact.imageData,
-               let uiImage = UIImage(data: imageData) {
+            if let fileName = customImageFileName, let uiImage = ImageStorageManager.shared.loadImage(named: fileName) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: width, height: height)
                     .clipped()
             } else {
-                // Fallback to initials
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: width, height: height)
-                    .overlay {
-                        Text(contact.givenName.prefix(1).uppercased())
-                            .font(.system(size: min(width, height) * 0.3, weight: .medium))
-                            .foregroundColor(.blue)
-                    }
+                // Try to load contact image on-demand if not available
+                ContactImageOnDemandRectangularView(contactIdentifier: contactIdentifier, width: width, height: height)
             }
         }
-        .id("\(contact.identifier)_\(customImageData?.count ?? 0)")
+        .id("\(contactIdentifier)_\(customImageFileName ?? "")")
     }
 }
 
@@ -900,34 +1098,116 @@ class ContactsManager: ObservableObject {
     
     /// Loads favorites from UserDefaults
     private func loadFavorites() {
-        if let data = UserDefaults.standard.data(forKey: "favorites"),
-           let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
-            // Refetch CNContact for each favorite using stored identifier so image data is present
-            var rebuilt: [FavoriteContact] = []
-            for var fav in favorites {
-                do {
-                    let fetched = try store.unifiedContact(withIdentifier: fav.contactIdentifier, keysToFetch: [
-                        CNContactGivenNameKey as CNKeyDescriptor,
-                        CNContactFamilyNameKey as CNKeyDescriptor,
-                        CNContactPhoneNumbersKey as CNKeyDescriptor,
-                        CNContactImageDataKey as CNKeyDescriptor,
-                        CNContactThumbnailImageDataKey as CNKeyDescriptor
-                    ])
-                    fav.contact = fetched
-                    rebuilt.append(fav)
+        if let data = UserDefaults.standard.data(forKey: "favorites") {
+            print("🔍 Loading favorites data: \(data.count) bytes")
+            if data.count > 4 * 1024 * 1024 {
+                print("🚨 CRITICAL: Existing favorites data exceeds 4MB limit! Forcing migration...")
+                // Force migration by calling migrateOldFavorites
+                migrateOldFavorites(from: data)
+                return
+            }
+            // Try to decode with new format first
+            if let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
+                // Refetch CNContact for each favorite using stored identifier so image data is present
+                var rebuilt: [FavoriteContact] = []
+                // No need to rebuild favorites since we're not storing CNContact objects anymore
+                rebuilt = favorites
+                self.favorites = rebuilt
+            } else {
+                // Try to migrate from old format
+                migrateOldFavorites(from: data)
+            }
+        }
+    }
+    
+    /// Migrates favorites from old format (with customImageData) to new format (with customImageFileName)
+    private func migrateOldFavorites(from data: Data) {
+        print("🔄 Starting migration from old format...")
+        
+        // Try to decode as raw JSON to access old customImageData
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            var migratedFavorites: [FavoriteContact] = []
+            
+            for item in json {
+                guard let contactIdentifier = item["contactIdentifier"] as? String,
+                      let phoneNumber = item["phoneNumber"] as? String,
+                      let displayName = item["displayName"] as? String else {
+                    continue
+                }
+                
+                    // Fetch the contact WITHOUT large image data to avoid memory issues
+                    do {
+                        let fetchedContact = try store.unifiedContact(withIdentifier: contactIdentifier, keysToFetch: [
+                            CNContactGivenNameKey as CNKeyDescriptor,
+                            CNContactFamilyNameKey as CNKeyDescriptor,
+                            CNContactPhoneNumbersKey as CNKeyDescriptor
+                            // Note: NOT fetching image data to avoid large data in memory during migration
+                            // Images will be loaded on-demand when needed
+                        ])
+                        
+                        // Create favorite with basic contact info (no CNContact stored)
+                        // This ensures no large image data is in memory that gets encoded
+                    
+                    // Handle old customImageData if it exists
+                    var customImageData: Data? = nil
+                    if let imageData = item["customImageData"] as? Data {
+                        print("🔄 Found old image data for \(displayName), size: \(imageData.count) bytes")
+                        customImageData = imageData
+                    }
+                    
+                    // Create new favorite with migration
+                    let favorite = FavoriteContact(
+                        contact: fetchedContact,
+                        phoneNumber: phoneNumber,
+                        displayName: displayName,
+                        communicationMethod: CommunicationMethod(rawValue: item["communicationMethod"] as? String ?? "Voice Call") ?? .voiceCall,
+                        communicationApp: CommunicationApp(rawValue: item["communicationApp"] as? String ?? "Phone") ?? .phone,
+                        customImageData: customImageData
+                    )
+                    
+                    migratedFavorites.append(favorite)
+                    print("✅ Migrated favorite: \(displayName)")
                 } catch {
-                    // Keep placeholder contact if fetch fails
-                    rebuilt.append(fav)
+                    print("❌ Failed to fetch contact during migration: \(error)")
                 }
             }
-            self.favorites = rebuilt
+            
+            print("🔄 Migration completed. Migrated \(migratedFavorites.count) favorites")
+            self.favorites = migratedFavorites
+            
+            // Save the migrated data - this will use the new file-based system
+            print("💾 Saving migrated data...")
+            saveFavorites()
+            print("✅ Migration and save completed successfully")
+        } else {
+            print("❌ Failed to parse old favorites data as JSON")
         }
     }
     
     /// Saves favorites to UserDefaults
     func saveFavorites() {
+        print("💾 saveFavorites called with \(favorites.count) favorites")
+        
+        // Note: No longer debugging CNContact image data since we don't store CNContact objects
+        
+        // Check data size before encoding
+        print("💾 About to encode \(favorites.count) favorites")
+        
         if let data = try? JSONEncoder().encode(favorites) {
+            print("💾 Encoded data size: \(data.count) bytes")
+            if data.count > 4 * 1024 * 1024 {
+                print("⚠️ WARNING: Data size (\(data.count) bytes) exceeds 4MB limit!")
+            }
+            
             UserDefaults.standard.set(data, forKey: "favorites")
+            print("✅ Successfully saved to UserDefaults")
+            
+            // Clean up orphaned images
+            let validFileNames = Set(favorites.compactMap { $0.customImageFileName })
+            ImageStorageManager.shared.cleanupOrphanedImages(validFileNames: validFileNames)
+            print("🧹 Cleaned up orphaned images")
+        } else {
+            print("❌ Failed to encode favorites data")
         }
     }
     
@@ -966,6 +1246,12 @@ class ContactsManager: ObservableObject {
     
     /// Removes favorites at specified indices
     func removeFavorites(at offsets: IndexSet) {
+        // Clean up image files before removing favorites
+        for index in offsets {
+            if let fileName = favorites[index].customImageFileName {
+                ImageStorageManager.shared.deleteImage(named: fileName)
+            }
+        }
         favorites.remove(atOffsets: offsets)
         saveFavorites()
     }
@@ -980,26 +1266,56 @@ class ContactsManager: ObservableObject {
 /// Model for favorite contacts
 struct FavoriteContact: Identifiable, Codable, Equatable {
     let id = UUID()
-    var contact: CNContact
     let contactIdentifier: String
     let phoneNumber: String
     let displayName: String
     var communicationMethod: CommunicationMethod
     var communicationApp: CommunicationApp
-    // Optional custom avatar image data selected by user
-    var customImageData: Data?
+    // Optional custom avatar image file name (stored in file system)
+    var customImageFileName: String?
+    
+    // Store basic contact info separately to avoid large CNContact in UserDefaults
+    let contactGivenName: String
+    let contactFamilyName: String
     
     enum CodingKeys: String, CodingKey {
-        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageData
+        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageFileName, contactGivenName, contactFamilyName
+        // Note: CNContact is NOT included in CodingKeys to avoid large data in UserDefaults
+    }
+    
+    // Method to fetch contact on demand without loading image data
+    func fetchContact() -> CNContact? {
+        let store = CNContactStore()
+        do {
+            let contact = try store.unifiedContact(withIdentifier: contactIdentifier, keysToFetch: [
+                CNContactGivenNameKey as CNKeyDescriptor,
+                CNContactFamilyNameKey as CNKeyDescriptor,
+                CNContactPhoneNumbersKey as CNKeyDescriptor,
+                CNContactImageDataKey as CNKeyDescriptor,
+                CNContactThumbnailImageDataKey as CNKeyDescriptor
+                // Note: We fetch image data here since it's only for display, not storage
+            ])
+            return contact
+        } catch {
+            print("Failed to fetch contact: \(error)")
+            return nil
+        }
     }
     
     init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil, customImageData: Data? = nil) {
-        self.contact = contact
         self.contactIdentifier = contact.identifier
         self.phoneNumber = phoneNumber
         self.displayName = displayName
         self.communicationMethod = communicationMethod
-        self.customImageData = customImageData
+        self.contactGivenName = contact.givenName
+        self.contactFamilyName = contact.familyName
+        
+        // Save custom image to file system if provided
+        if let imageData = customImageData {
+            self.customImageFileName = ImageStorageManager.shared.saveImage(imageData, for: contact.identifier)
+        } else {
+            self.customImageFileName = nil
+        }
         
         // Set appropriate default app based on communication method
         if let app = communicationApp {
@@ -1023,10 +1339,15 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         displayName = try container.decode(String.self, forKey: .displayName)
         communicationMethod = try container.decodeIfPresent(CommunicationMethod.self, forKey: .communicationMethod) ?? .voiceCall
         communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phone
-        customImageData = try container.decodeIfPresent(Data.self, forKey: .customImageData)
+        customImageFileName = try container.decodeIfPresent(String.self, forKey: .customImageFileName)
+        contactGivenName = try container.decodeIfPresent(String.self, forKey: .contactGivenName) ?? ""
+        contactFamilyName = try container.decodeIfPresent(String.self, forKey: .contactFamilyName) ?? ""
         
-        // Placeholder; will be replaced after load using contactIdentifier
-        contact = CNContact()
+        // Handle migration from old customImageData format
+        // Note: We can't access the old key since it's not in CodingKeys anymore
+        // This migration will happen automatically when old data is loaded
+        
+        // These will be set by the decoder from the stored data
     }
     
     func encode(to encoder: Encoder) throws {
@@ -1036,7 +1357,9 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         try container.encode(displayName, forKey: .displayName)
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
-        try container.encodeIfPresent(customImageData, forKey: .customImageData)
+        try container.encodeIfPresent(customImageFileName, forKey: .customImageFileName)
+        try container.encode(contactGivenName, forKey: .contactGivenName)
+        try container.encode(contactFamilyName, forKey: .contactFamilyName)
     }
     
     // MARK: - Equatable
@@ -1288,7 +1611,7 @@ struct PhotoPickerSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
-                ContactPhotoView(contact: favorite.contact, customImageData: $favorite.customImageData, size: 60)
+                ContactPhotoView(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, size: 60)
                 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
@@ -1323,9 +1646,12 @@ struct PhotoPickerSection: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                     
-                    if favorite.customImageData != nil {
+                    if favorite.customImageFileName != nil {
                         Button(role: .destructive) {
-                            favorite.customImageData = nil
+                            if let fileName = favorite.customImageFileName {
+                                ImageStorageManager.shared.deleteImage(named: fileName)
+                            }
+                            favorite.customImageFileName = nil
                         } label: {
                             HStack {
                                 Image(systemName: "trash")
@@ -1354,7 +1680,12 @@ struct PhotoPickerSection: View {
                     let resized = resizeImage(uiImage, maxDimension: 512)
                     if let jpeg = resized.jpegData(compressionQuality: 0.85) {
                         DispatchQueue.main.async {
-                            favorite.customImageData = jpeg
+                            // Delete old image if exists
+                            if let oldFileName = favorite.customImageFileName {
+                                ImageStorageManager.shared.deleteImage(named: oldFileName)
+                            }
+                            // Save new image and get file name
+                            favorite.customImageFileName = ImageStorageManager.shared.saveImage(jpeg, for: favorite.contactIdentifier)
                             selectedItem = nil
                         }
                     }
@@ -1408,7 +1739,12 @@ struct CameraPicker: UIViewControllerRepresentable {
             if let editedImage = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage {
                 let resized = resizeImage(editedImage, maxDimension: 512)
                 if let jpeg = resized.jpegData(compressionQuality: 0.85) {
-                    parent.favorite.customImageData = jpeg
+                    // Delete old image if exists
+                    if let oldFileName = parent.favorite.customImageFileName {
+                        ImageStorageManager.shared.deleteImage(named: oldFileName)
+                    }
+                    // Save new image and get file name
+                    parent.favorite.customImageFileName = ImageStorageManager.shared.saveImage(jpeg, for: parent.favorite.contactIdentifier)
                 }
             }
             parent.dismiss()
@@ -1629,7 +1965,7 @@ struct ContactDetailPage: View {
                                 print("🔍 PICTURE TAPPED - Initiating dial!")
                                 initiateCommunication()
                             }) {
-                                ContactPhotoViewRectangular(contact: favorite.contact, customImageData: $favorite.customImageData, width: geometry.size.width, height: geometry.size.height * 0.6)
+                                ContactPhotoViewRectangular(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, width: geometry.size.width, height: geometry.size.height * 0.6)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(PlainButtonStyle()) // Remove default button styling
