@@ -2554,35 +2554,47 @@ struct ContactDetailViewDirect: View {
                 HStack {
                     // Left navigation button (previous) - DEBUG VERSION
                     Button(action: {
-                        if currentIndex > 0 {
-                            withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            if currentIndex > 0 {
                                 currentIndex -= 1
+                            } else {
+                                currentIndex = favorites.count - 1
                             }
                         }
                     }) {
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(width: 120, height: 200)
-                            .contentShape(Rectangle())
+                        Image(systemName: "chevron.left")
+                            .font(.title2)
+                            .foregroundColor(.gray)
+                            .frame(width: 80, height: 160)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
                     }
-                    .disabled(currentIndex == 0)
+                    .accessibilityLabel("Previous contact")
                     
                     Spacer()
                     
                     // Right navigation button (next) - DEBUG VERSION
                     Button(action: {
-                        if currentIndex < favorites.count - 1 {
-                            withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            if currentIndex < favorites.count - 1 {
                                 currentIndex += 1
+                            } else {
+                                currentIndex = 0
                             }
                         }
                     }) {
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(width: 120, height: 200)
-                            .contentShape(Rectangle())
+                        Image(systemName: "chevron.right")
+                            .font(.title2)
+                            .foregroundColor(.gray)
+                            .frame(width: 80, height: 160)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
                     }
-                    .disabled(currentIndex == favorites.count - 1)
+                    .accessibilityLabel("Next contact")
                 }
                 .frame(height: 200)
             }
