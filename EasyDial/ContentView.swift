@@ -187,7 +187,7 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        Button(">>My Dial<<") {
+                        Button("My Dial") {
                             // If currently -1, change to 0, otherwise keep current value
                             if lastViewedContactIndex == -1 {
                                 lastViewedContactIndex = 0
@@ -197,9 +197,13 @@ struct ContentView: View {
                             }
                             showingContactDetail = true
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.gray.opacity(0.2))
+                        .foregroundColor(.primary)
+                        .cornerRadius(8)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(.blue)
                         .disabled(contactsManager.favorites.isEmpty)
                     }
                 }
@@ -2140,7 +2144,7 @@ struct HelpView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HelpSection(
                             title: "Getting Started",
-                            content: "• Add contacts to favorites from your phone's contact list\n• Tap 'Add & Edit' to manage your favorites\n• Use '>>My Dial<<' to enter the quick dial mode"
+                            content: "• Add contacts to favorites from your phone's contact list\n• Tap 'Add & Edit' to manage your favorites\n• Use the 'My Dial' button to enter the quick dial mode"
                         )
                         
                         HelpSection(
