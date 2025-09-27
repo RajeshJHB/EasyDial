@@ -130,13 +130,13 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .principal) {
                     if !contactsManager.favorites.isEmpty && !isEditMode {
-                        Button(">>Easy Dial<<") {
+                        Button(">>My Dial<<") {
                             // If currently -1, change to 0, otherwise keep current value
                             if lastViewedContactIndex == -1 {
                                 lastViewedContactIndex = 0
-                                print("🔍 Easy Dial button pressed, changed lastViewedContactIndex from -1 to 0")
+                                print("🔍 My Dial button pressed, changed lastViewedContactIndex from -1 to 0")
                             } else {
-                                print("🔍 Easy Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
+                                print("🔍 My Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
                             }
                             showingContactDetail = true
                         }
@@ -193,7 +193,7 @@ struct ContentView: View {
             }
             .actionSheet(isPresented: $showingInfoMenu) {
                 ActionSheet(
-                    title: Text("Easy Dial"),
+                    title: Text("My Dial"),
                     message: Text("Choose an option"),
                     buttons: [
                         .default(Text("Help")) {
@@ -1554,7 +1554,7 @@ struct ContactDetailView: View {
         }
         .actionSheet(isPresented: $showingInfoMenu) {
             ActionSheet(
-                title: Text("Easy Dial"),
+                title: Text("My Dial"),
                 message: Text("Choose an option"),
                 buttons: [
                     .default(Text("Help")) {
@@ -1782,7 +1782,7 @@ struct HelpView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Easy Dial Help")
+                    Text("My Dial Help")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .padding(.bottom)
@@ -1790,11 +1790,11 @@ struct HelpView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HelpSection(
                             title: "Getting Started",
-                            content: "• Add contacts to favorites from your phone's contact list\n• Tap 'Add & Edit' to manage your favorites\n• Use '>>Easy Dial<<' to enter the quick dial mode"
+                            content: "• Add contacts to favorites from your phone's contact list\n• Tap 'Add & Edit' to manage your favorites\n• Use '>>My Dial<<' to enter the quick dial mode"
                         )
                         
                         HelpSection(
-                            title: "Easy Dial Mode",
+                            title: "My Dial Mode",
                             content: "• Swipe left/right to navigate between contacts\n• Tap the contact photo to make a call\n• Tap the call button for voice calls\n• Use the Home button to return to favorites"
                         )
                         
@@ -1865,7 +1865,7 @@ struct AboutView: View {
                     .foregroundColor(.blue)
                 
                 VStack(spacing: 10) {
-                    Text("Easy Dial")
+                    Text("My Dial")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
