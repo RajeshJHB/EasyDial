@@ -370,11 +370,11 @@ struct FavoriteContactRow: View {
                     
                     HStack {
                         Image(systemName: favorite.communicationApp.icon)
-                            .foregroundColor(.green)
+                            .foregroundColor(.green.opacity(0.7))
                             .font(.caption)
                         Text(favorite.communicationApp.rawValue)
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(.green.opacity(0.7))
                     }
                 }
                 
@@ -401,7 +401,7 @@ struct FavoriteContactRow: View {
                     Image(systemName: favorite.communicationMethod.icon)
                         .foregroundColor(.white)
                         .frame(width: 44, height: 44)
-                        .background(Color.green)
+                        .background(Color.green.opacity(0.8))
                         .clipShape(Circle())
                 }
                 .accessibilityLabel("\(favorite.communicationMethod.rawValue) \(favorite.displayName)")
@@ -1164,7 +1164,7 @@ struct CommunicationConfigView: View {
                                 ForEach(availableApps, id: \.self) { app in
                                     HStack {
                                         Image(systemName: app.icon)
-                                            .foregroundColor(.green)
+                                            .foregroundColor(.green.opacity(0.7))
                                             .frame(width: 20)
                                         Text(app.rawValue)
                                         Spacer()
@@ -1211,7 +1211,7 @@ struct CommunicationConfigView: View {
                                 Text(selectedMethod.rawValue)
                                 Spacer()
                                 Image(systemName: selectedApp.icon)
-                                    .foregroundColor(.green)
+                                    .foregroundColor(.green.opacity(0.7))
                                 Text(selectedApp.rawValue)
                             }
                         }
@@ -1305,12 +1305,12 @@ struct PhotoPickerSection: View {
                         } label: {
                             HStack {
                                 Image(systemName: "camera")
-                                    .foregroundColor(.green)
+                                    .foregroundColor(.green.opacity(0.7))
                                 Text("Camera")
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal, 12)
-                            .background(Color.green.opacity(0.1))
+                            .background(Color.green.opacity(0.05))
                             .cornerRadius(8)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -1659,7 +1659,7 @@ struct ContactDetailPage: View {
                         VStack(spacing: 2) {
                             Image(systemName: favorite.communicationApp.iconName)
                                 .font(.title3)
-                                .foregroundColor(.green)
+                                .foregroundColor(.green.opacity(0.7))
                             Text(favorite.communicationApp.displayName)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
