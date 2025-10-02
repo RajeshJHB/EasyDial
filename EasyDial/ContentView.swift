@@ -2357,51 +2357,69 @@ struct SuggestionView: View {
     }
 }
 
+/// Reusable menu row component that makes the entire row tappable
+struct MenuRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(iconColor)
+                    .frame(width: 24, height: 24)
+                
+                Text(title)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+                    .font(.caption)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle()) // Makes entire area tappable
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 /// Info menu view that replaces ActionSheet
 struct InfoMenuView: View {
     @Binding var showingHelp: Bool
     @Binding var showingAbout: Bool
     @Binding var showingSuggestions: Bool
+    @State private var showingDonationPopup = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         NavigationView {
             List {
-                Button(action: {
+                MenuRow(
+                    icon: "questionmark.circle",
+                    iconColor: .blue,
+                    title: "Help"
+                ) {
                     dismiss()
                     showingHelp = true
-                }) {
-                    HStack {
-                        Image(systemName: "questionmark.circle")
-                            .foregroundColor(.blue)
-                        Text("Help")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                Button(action: {
-                    dismiss()
-                    if let url = URL(string: "https://paypal.me/easydial") {
-                        UIApplication.shared.open(url)
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "heart.fill")
-                            .foregroundColor(.red)
-                        Text("Donate")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
+                MenuRow(
+                    icon: "heart.fill",
+                    iconColor: .red,
+                    title: "Donate"
+                ) {
+                    showingDonationPopup = true
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                Button(action: {
+                MenuRow(
+                    icon: "info.circle",
+                    iconColor: .blue,
+                    title: "Version"
+                ) {
                     dismiss()
                     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
                     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
@@ -2411,50 +2429,25 @@ struct InfoMenuView: View {
                        let window = windowScene.windows.first {
                         window.rootViewController?.present(alert, animated: true)
                     }
-                }) {
-                    HStack {
-                        Image(systemName: "info.circle")
-                            .foregroundColor(.blue)
-                        Text("Version")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                Button(action: {
+                MenuRow(
+                    icon: "person.circle",
+                    iconColor: .blue,
+                    title: "About"
+                ) {
                     dismiss()
                     showingAbout = true
-                }) {
-                    HStack {
-                        Image(systemName: "person.circle")
-                            .foregroundColor(.blue)
-                        Text("About")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
                 }
-                .buttonStyle(PlainButtonStyle())
                 
-                Button(action: {
+                MenuRow(
+                    icon: "lightbulb",
+                    iconColor: .yellow,
+                    title: "Suggestions"
+                ) {
                     dismiss()
                     showingSuggestions = true
-                }) {
-                    HStack {
-                        Image(systemName: "lightbulb")
-                            .foregroundColor(.yellow)
-                        Text("Suggestions")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    }
                 }
-                .buttonStyle(PlainButtonStyle())
             }
             .navigationTitle("My Dial")
             .navigationBarTitleDisplayMode(.inline)
@@ -2465,6 +2458,171 @@ struct InfoMenuView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showingDonationPopup) {
+            DonationPopupView()
+        }
+    }
+}
+
+/// Donation popup view with amount selection
+struct DonationPopupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var purchaseManager = InAppPurchaseManager.shared
+    @State private var selectedAmount: Double = 2.99
+    @State private var showingPurchaseAlert = false
+    @State private var purchaseSuccessMessage = ""
+    @State private var hasInitiatedPurchase = false
+    
+    // Available donation amounts in USD
+    private let donationAmounts: [Double] = [0.99, 1.99, 2.99, 4.99, 9.99, 14.99, 19.99, 20.00]
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 30) {
+                // Header
+                VStack(spacing: 10) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.red)
+                    
+                    Text("Support My Dial")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("Thank You for your donation")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                
+                // Amount selection
+                VStack(alignment: .leading, spacing: 15) {
+                    Text("Select Amount")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Menu {
+                        ForEach(donationAmounts, id: \.self) { amount in
+                            Button(action: {
+                                selectedAmount = amount
+                            }) {
+                                HStack {
+                                    Text(formatAmount(amount))
+                                    Spacer()
+                                    if selectedAmount == amount {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(formatAmount(selectedAmount))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .foregroundColor(.gray)
+                                .font(.caption)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+                
+                // Action buttons
+                VStack(spacing: 15) {
+                    // Donate button
+                    Button(action: {
+                        hasInitiatedPurchase = true
+                        purchaseManager.purchaseDonation(amount: selectedAmount)
+                    }) {
+                        HStack {
+                            if purchaseManager.isPurchasing {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "heart.fill")
+                            }
+                            Text(purchaseManager.isPurchasing ? "Processing..." : "Donate \(formatAmount(selectedAmount))")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(purchaseManager.isPurchasing ? Color.red.opacity(0.7) : Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        .font(.headline)
+                    }
+                    .disabled(purchaseManager.isPurchasing)
+                    
+                    // Cancel button
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Text("Cancel")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.gray.opacity(0.2))
+                            .foregroundColor(.primary)
+                            .cornerRadius(10)
+                            .font(.headline)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+            .navigationTitle("Donation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .alert("Purchase Error", isPresented: .constant(purchaseManager.purchaseError != nil)) {
+            Button("OK") {
+                purchaseManager.purchaseError = nil
+                hasInitiatedPurchase = false // Reset the flag on error
+            }
+        } message: {
+            Text(purchaseManager.purchaseError ?? "")
+        }
+        .alert("Thank You!", isPresented: $showingPurchaseAlert) {
+            Button("OK") {
+                dismiss()
+            }
+        } message: {
+            Text(purchaseSuccessMessage)
+        }
+        .onReceive(purchaseManager.$isPurchasing) { isPurchasing in
+            // Only show success if we actually initiated a purchase and it completed successfully
+            if !isPurchasing && purchaseManager.purchaseError == nil && hasInitiatedPurchase {
+                // Purchase completed successfully
+                purchaseSuccessMessage = "Thank you for your generous donation of \(formatAmount(selectedAmount))! Your support helps us improve My Dial."
+                showingPurchaseAlert = true
+                hasInitiatedPurchase = false // Reset the flag
+            }
+        }
+    }
+    
+    private func formatAmount(_ amount: Double) -> String {
+        if amount == 20.00 {
+            return "$20.00"
+        } else {
+            return String(format: "$%.2f", amount)
         }
     }
 }
