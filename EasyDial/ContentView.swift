@@ -2545,7 +2545,9 @@ struct DonationPopupView: View {
                     // Donate button
                     Button(action: {
                         hasInitiatedPurchase = true
-                        purchaseManager.purchaseDonation(amount: selectedAmount)
+                        Task {
+                            await purchaseManager.purchaseDonation(amount: selectedAmount)
+                        }
                     }) {
                         HStack {
                             if purchaseManager.isPurchasing {

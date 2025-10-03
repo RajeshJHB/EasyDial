@@ -1,16 +1,18 @@
 import Foundation
 import StoreKit
 
-class InAppPurchaseManager: NSObject, ObservableObject {
+@MainActor
+class InAppPurchaseManager: ObservableObject {
     static let shared = InAppPurchaseManager()
     
-    @Published var products: [SKProduct] = []
+    @Published var products: [Product] = []
     @Published var isLoading = false
     @Published var purchaseError: String?
     @Published var isPurchasing = false
     
-    // Product IDs for your donation amounts
-    // You'll need to create these in App Store Connect
+    // Product IDs for your donation amounts (CONSUMABLE products)
+    // You'll need to create these as CONSUMABLE products in App Store Connect
+    // Consumable = users can donate multiple times
     private let productIdentifiers: Set<String> = [
         "com.tvrgod.easydial.donation.0.99",
         "com.tvrgod.easydial.donation.1.99",
@@ -22,47 +24,76 @@ class InAppPurchaseManager: NSObject, ObservableObject {
         "com.tvrgod.easydial.donation.20.00"
     ]
     
-    private var productsRequest: SKProductsRequest?
+    private var transactionListener: Task<Void, Error>?
     
-    override init() {
-        super.init()
-        SKPaymentQueue.default().add(self)
-        loadProducts()
+    init() {
+        // Start listening for transaction updates
+        transactionListener = listenForTransactions()
+        Task {
+            await loadProducts()
+        }
     }
     
     deinit {
-        SKPaymentQueue.default().remove(self)
+        transactionListener?.cancel()
     }
     
     // MARK: - Product Loading
     
-    func loadProducts() {
+    func loadProducts() async {
         isLoading = true
-        productsRequest = SKProductsRequest(productIdentifiers: productIdentifiers)
-        productsRequest?.delegate = self
-        productsRequest?.start()
+        
+        do {
+            products = try await Product.products(for: productIdentifiers)
+            
+            // Validate that all products are consumable (required for donations)
+            for product in products {
+                if product.type != .consumable {
+                    print("⚠️ WARNING: Product \(product.id) is not configured as CONSUMABLE in App Store Connect")
+                    print("⚠️ Donation products must be CONSUMABLE to allow multiple purchases")
+                }
+            }
+            
+            isLoading = false
+        } catch {
+            isLoading = false
+            purchaseError = "Failed to load products: \(error.localizedDescription)"
+        }
     }
     
     // MARK: - Purchase Methods
     
-    func purchase(product: SKProduct) {
-        guard SKPaymentQueue.canMakePayments() else {
-            purchaseError = "In-app purchases are not available on this device"
-            return
-        }
+    func purchase(product: Product) async {
+        guard !isPurchasing else { return }
         
         isPurchasing = true
         purchaseError = nil
         
-        let payment = SKPayment(product: product)
-        SKPaymentQueue.default().add(payment)
+        do {
+            let result = try await product.purchase()
+            
+            switch result {
+            case .success(let verification):
+                await handleSuccessfulPurchase(verification: verification)
+            case .userCancelled:
+                // User cancelled - no error needed
+                break
+            case .pending:
+                purchaseError = "Purchase is pending approval"
+            @unknown default:
+                purchaseError = "Unknown purchase result"
+            }
+        } catch {
+            purchaseError = "Purchase failed: \(error.localizedDescription)"
+        }
+        
+        isPurchasing = false
     }
     
-    func purchaseDonation(amount: Double) {
-        // Find the product that matches the donation amount
+    func purchaseDonation(amount: Double) async {
         let productId = productIdForAmount(amount)
-        if let product = products.first(where: { $0.productIdentifier == productId }) {
-            purchase(product: product)
+        if let product = products.first(where: { $0.id == productId }) {
+            await purchase(product: product)
         } else {
             purchaseError = "Donation option not available. Please try again later."
         }
@@ -82,136 +113,76 @@ class InAppPurchaseManager: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - Restore Purchases
+    // MARK: - Restore Purchases (Not needed for consumable donations)
     
-    func restorePurchases() {
-        isLoading = true
-        SKPaymentQueue.default().restoreCompletedTransactions()
-    }
+    // Note: Consumable products don't need restore functionality
+    // Users can simply purchase again if they want to donate more
     
     // MARK: - Helper Methods
     
-    func getProductForAmount(_ amount: Double) -> SKProduct? {
+    func getProductForAmount(_ amount: Double) -> Product? {
         let productId = productIdForAmount(amount)
-        return products.first { $0.productIdentifier == productId }
+        return products.first { $0.id == productId }
     }
     
-    func formatPrice(for product: SKProduct) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = product.priceLocale
-        return formatter.string(from: product.price) ?? "$0.00"
+    func formatPrice(for product: Product) -> String {
+        return product.displayPrice
     }
-}
-
-// MARK: - SKProductsRequestDelegate
-
-extension InAppPurchaseManager: SKProductsRequestDelegate {
-    func productsRequest(_ request: SKProductsRequest, didReceive response: SKProductsResponse) {
-        DispatchQueue.main.async {
-            self.products = response.products
-            self.isLoading = false
-            
-            if !response.invalidProductIdentifiers.isEmpty {
-                print("Invalid product identifiers: \(response.invalidProductIdentifiers)")
+    
+    // MARK: - Transaction Handling
+    
+    private func listenForTransactions() -> Task<Void, Error> {
+        return Task.detached {
+            for await result in Transaction.updates {
+                do {
+                    let transaction = try await self.checkVerified(result)
+                    await self.handleSuccessfulPurchase(verification: result)
+                    await transaction.finish()
+                } catch {
+                    // Handle verification failure
+                    print("Transaction verification failed: \(error)")
+                }
             }
         }
     }
     
-    func request(_ request: SKRequest, didFailWithError error: Error) {
-        DispatchQueue.main.async {
-            self.isLoading = false
-            self.purchaseError = "Failed to load products: \(error.localizedDescription)"
-        }
-    }
-}
-
-// MARK: - SKPaymentTransactionObserver
-
-extension InAppPurchaseManager: SKPaymentTransactionObserver {
-    func paymentQueue(_ queue: SKPaymentQueue, updatedTransactions transactions: [SKPaymentTransaction]) {
-        for transaction in transactions {
-            switch transaction.transactionState {
-            case .purchased:
-                handleSuccessfulPurchase(transaction)
-            case .failed:
-                handleFailedPurchase(transaction)
-            case .restored:
-                handleRestoredPurchase(transaction)
-            case .deferred:
-                // Transaction is waiting for approval (e.g., Ask to Buy)
-                break
-            case .purchasing:
-                // Transaction is being processed
-                break
-            @unknown default:
-                break
-            }
-        }
-    }
-    
-    private func handleSuccessfulPurchase(_ transaction: SKPaymentTransaction) {
-        DispatchQueue.main.async {
-            self.isPurchasing = false
+    private func handleSuccessfulPurchase(verification: VerificationResult<Transaction>) async {
+        do {
+            let transaction = try await checkVerified(verification)
             
-            // Here you could send the transaction receipt to your server
-            // for validation and to track donations
-            
-            // For now, we'll just show success
-            print("Purchase successful: \(transaction.payment.productIdentifier)")
+            // Here you could send the transaction to your server for validation
+            // For now, we'll just log success
+            print("Purchase successful: \(transaction.productID)")
             
             // Finish the transaction
-            SKPaymentQueue.default().finishTransaction(transaction)
+            await transaction.finish()
+        } catch {
+            print("Purchase verification failed: \(error)")
         }
     }
     
-    private func handleFailedPurchase(_ transaction: SKPaymentTransaction) {
-        DispatchQueue.main.async {
-            self.isPurchasing = false
-            
-            if let error = transaction.error as? SKError {
-                switch error.code {
-                case .paymentCancelled:
-                    // User cancelled - don't show error
-                    break
-                case .paymentNotAllowed:
-                    self.purchaseError = "Payment not allowed on this device"
-                case .paymentInvalid:
-                    self.purchaseError = "Invalid payment"
-                case .clientInvalid:
-                    self.purchaseError = "Client invalid"
-                case .storeProductNotAvailable:
-                    self.purchaseError = "Product not available"
-                default:
-                    self.purchaseError = "Purchase failed: \(error.localizedDescription)"
-                }
-            } else {
-                self.purchaseError = "Purchase failed: \(transaction.error?.localizedDescription ?? "Unknown error")"
-            }
-            
-            SKPaymentQueue.default().finishTransaction(transaction)
+    private func checkVerified<T>(_ result: VerificationResult<T>) async throws -> T {
+        // Check whether the JWS passes StoreKit verification
+        switch result {
+        case .unverified:
+            // StoreKit parses the JWS, but it fails verification
+            throw PurchaseError.failedVerification
+        case .verified(let safe):
+            // The result is verified. Return the unwrapped value
+            return safe
         }
     }
+}
+
+// MARK: - Purchase Error
+
+enum PurchaseError: Error, LocalizedError {
+    case failedVerification
     
-    private func handleRestoredPurchase(_ transaction: SKPaymentTransaction) {
-        DispatchQueue.main.async {
-            self.isLoading = false
-            print("Purchase restored: \(transaction.payment.productIdentifier)")
-            SKPaymentQueue.default().finishTransaction(transaction)
-        }
-    }
-    
-    func paymentQueueRestoreCompletedTransactionsFinished(_ queue: SKPaymentQueue) {
-        DispatchQueue.main.async {
-            self.isLoading = false
-            print("Restore completed")
-        }
-    }
-    
-    func paymentQueue(_ queue: SKPaymentQueue, restoreCompletedTransactionsFailedWithError error: Error) {
-        DispatchQueue.main.async {
-            self.isLoading = false
-            self.purchaseError = "Restore failed: \(error.localizedDescription)"
+    var errorDescription: String? {
+        switch self {
+        case .failedVerification:
+            return "Purchase verification failed"
         }
     }
 }
