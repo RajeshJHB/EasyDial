@@ -2469,13 +2469,13 @@ struct InfoMenuView: View {
 struct DonationPopupView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var purchaseManager = InAppPurchaseManager.shared
-    @State private var selectedAmount: Double = 2.99
+    @State private var selectedAmount: Double = 4.99
     @State private var showingPurchaseAlert = false
     @State private var purchaseSuccessMessage = ""
     @State private var hasInitiatedPurchase = false
     
     // Available donation amounts in USD
-    private let donationAmounts: [Double] = [0.99, 1.99, 2.99, 4.99, 9.99, 14.99, 19.99, 20.00]
+    private let donationAmounts: [Double] = [4.99]
     
     var body: some View {
         NavigationView {
@@ -2497,44 +2497,29 @@ struct DonationPopupView: View {
                         .padding(.horizontal)
                 }
                 
-                // Amount selection
+                // Amount display (fixed at $4.99)
                 VStack(alignment: .leading, spacing: 15) {
-                    Text("Select Amount")
+                    Text("Donation Amount")
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Menu {
-                        ForEach(donationAmounts, id: \.self) { amount in
-                            Button(action: {
-                                selectedAmount = amount
-                            }) {
-                                HStack {
-                                    Text(formatAmount(amount))
-                                    Spacer()
-                                    if selectedAmount == amount {
-                                        Image(systemName: "checkmark")
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Text(formatAmount(selectedAmount))
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .foregroundColor(.gray)
-                                .font(.caption)
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
+                    HStack {
+                        Text(formatAmount(selectedAmount))
+                            .foregroundColor(.primary)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(.red)
+                            .font(.title3)
                     }
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .padding(.horizontal)
                 

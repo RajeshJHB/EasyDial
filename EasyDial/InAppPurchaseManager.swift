@@ -14,14 +14,7 @@ class InAppPurchaseManager: ObservableObject {
     // You'll need to create these as CONSUMABLE products in App Store Connect
     // Consumable = users can donate multiple times
     private let productIdentifiers: Set<String> = [
-        "com.tvrgod.easydial.donation.0.99",
-        "com.tvrgod.easydial.donation.1.99",
-        "com.tvrgod.easydial.donation.2.99",
-        "com.tvrgod.easydial.donation.4.99",
-        "com.tvrgod.easydial.donation.9.99",
-        "com.tvrgod.easydial.donation.14.99",
-        "com.tvrgod.easydial.donation.19.99",
-        "com.tvrgod.easydial.donation.20.00"
+        "com.tvrgod.easydial.donation.4.99"
     ]
     
     private var transactionListener: Task<Void, Error>?
@@ -100,17 +93,8 @@ class InAppPurchaseManager: ObservableObject {
     }
     
     private func productIdForAmount(_ amount: Double) -> String {
-        switch amount {
-        case 0.99: return "com.tvrgod.easydial.donation.0.99"
-        case 1.99: return "com.tvrgod.easydial.donation.1.99"
-        case 2.99: return "com.tvrgod.easydial.donation.2.99"
-        case 4.99: return "com.tvrgod.easydial.donation.4.99"
-        case 9.99: return "com.tvrgod.easydial.donation.9.99"
-        case 14.99: return "com.tvrgod.easydial.donation.14.99"
-        case 19.99: return "com.tvrgod.easydial.donation.19.99"
-        case 20.00: return "com.tvrgod.easydial.donation.20.00"
-        default: return "com.tvrgod.easydial.donation.2.99"
-        }
+        // Only $4.99 is available
+        return "com.tvrgod.easydial.donation.4.99"
     }
     
     // MARK: - Restore Purchases (Not needed for consumable donations)
