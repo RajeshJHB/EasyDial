@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		560BB3892E948DC40019D0BF /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 560BB3882E948DC40019D0BF /* Products.storekit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5651371A2E769B7A0041C5EF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		560BB3882E948DC40019D0BF /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		5651370C2E769B790041C5EF /* EasyDial.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EasyDial.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		565137192E769B7A0041C5EF /* EasyDialTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EasyDialTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		565137232E769B7A0041C5EF /* EasyDialUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EasyDialUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -88,6 +93,7 @@
 		565137032E769B790041C5EF = {
 			isa = PBXGroup;
 			children = (
+				560BB3882E948DC40019D0BF /* Products.storekit */,
 				5651370E2E769B790041C5EF /* EasyDial */,
 				5651371C2E769B7A0041C5EF /* EasyDialTests */,
 				565137262E769B7A0041C5EF /* EasyDialUITests */,
@@ -225,6 +231,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				560BB3892E948DC40019D0BF /* Products.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

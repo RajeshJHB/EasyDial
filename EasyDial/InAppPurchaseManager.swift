@@ -39,8 +39,21 @@ class InAppPurchaseManager: ObservableObject {
         do {
             products = try await Product.products(for: productIdentifiers)
             
+            print("🔍 StoreKit Debug:")
+            print("🔍 Requested product IDs: \(productIdentifiers)")
+            print("🔍 Loaded products count: \(products.count)")
+            
+            if products.isEmpty {
+                print("⚠️ No products loaded! Check:")
+                print("⚠️ 1. App Store Connect products are created")
+                print("⚠️ 2. Product IDs match exactly")
+                print("⚠️ 3. Products are approved for sale")
+                print("⚠️ 4. Using sandbox Apple ID for testing")
+            }
+            
             // Validate that all products are consumable (required for donations)
             for product in products {
+                print("🔍 Loaded product: \(product.id) - \(product.displayName) - \(product.displayPrice)")
                 if product.type != .consumable {
                     print("⚠️ WARNING: Product \(product.id) is not configured as CONSUMABLE in App Store Connect")
                     print("⚠️ Donation products must be CONSUMABLE to allow multiple purchases")
@@ -50,6 +63,7 @@ class InAppPurchaseManager: ObservableObject {
             isLoading = false
         } catch {
             isLoading = false
+            print("❌ Product loading error: \(error)")
             purchaseError = "Failed to load products: \(error.localizedDescription)"
         }
     }
@@ -85,9 +99,14 @@ class InAppPurchaseManager: ObservableObject {
     
     func purchaseDonation(amount: Double) async {
         let productId = productIdForAmount(amount)
+        print("🔍 Attempting to purchase: \(productId) for amount: \(amount)")
+        
         if let product = products.first(where: { $0.id == productId }) {
+            print("🔍 Found product: \(product.displayName) - \(product.displayPrice)")
             await purchase(product: product)
         } else {
+            print("❌ Product not found: \(productId)")
+            print("❌ Available products: \(products.map { $0.id })")
             purchaseError = "Donation option not available. Please try again later."
         }
     }
