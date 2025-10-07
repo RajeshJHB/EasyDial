@@ -9,6 +9,7 @@ import SwiftUI
 import Contacts
 import UIKit
 import PhotosUI
+import MessageUI
 
 // MARK: - Image Storage Manager
 
@@ -2107,6 +2108,8 @@ struct HelpView: View {
                     Text("My Dial Help")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.bottom)
                     
                     VStack(alignment: .leading, spacing: 16) {
@@ -2198,7 +2201,9 @@ struct AboutView: View {
                 }
                 
                 VStack(spacing: 15) {
-                    Text("Version 1.0")
+                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                    let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+                    Text("Version \(appVersion) (Build \(buildNumber))")
                         .font(.title3)
                         .fontWeight(.medium)
                     
@@ -2244,115 +2249,112 @@ struct AboutView: View {
     }
 }
 
+
 /// Suggestion view for user feedback
 struct SuggestionView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var suggestionText = ""
-    @State private var showingEmailAlert = false
-    @State private var emailAlertMessage = ""
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("We'd love to hear your suggestions!")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .multilineTextAlignment(.center)
-                    .padding(.top)
-                
-                Text("Help us improve My Dial by sharing your ideas, bug reports, or feature requests.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your Suggestion:")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+            VStack(spacing: 30) {
+                VStack(spacing: 16) {
+                    Image(systemName: "envelope.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.blue)
                     
-                    TextEditor(text: $suggestionText)
-                        .frame(minHeight: 150)
-                        .padding(8)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
-                }
-                .padding(.horizontal)
-                
-                if suggestionText.isEmpty {
-                    Text("Please enter your suggestion above")
-                        .font(.caption)
+                    Text("We'd love to hear your comments!")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Message us with a personal review and any other suggestions you have.")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                }
+                
+                VStack(spacing: 16) {
+                    Text("Send us an email with your comments:")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                    
+                    Button(action: openEmailApp) {
+                        HStack {
+                            Image(systemName: "envelope.circle.fill")
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("apps@tvrgod.com")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Tap to open email app")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .foregroundColor(.blue)
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal)
                 }
                 
                 Spacer()
                 
-                Button(action: sendSuggestion) {
-                    HStack {
-                        Image(systemName: "envelope.fill")
-                        Text("Send Suggestion")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(suggestionText.isEmpty ? Color.gray.opacity(0.3) : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-                .disabled(suggestionText.isEmpty)
-                .padding(.horizontal)
-                .padding(.bottom)
+                Text("Device information will be automatically included in your email.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
             }
-            .navigationTitle("Suggestions")
+            .padding(.top)
+            .navigationTitle("Comment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Done") {
                         dismiss()
                     }
                 }
             }
         }
-        .alert("Email Sent", isPresented: $showingEmailAlert) {
-            Button("OK") {
-                if emailAlertMessage.contains("successfully") {
-                    dismiss()
-                }
-            }
-        } message: {
-            Text(emailAlertMessage)
-        }
     }
     
-    private func sendSuggestion() {
-        let subject = "My Dial App Suggestion"
+    private func openEmailApp() {
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let deviceModel = UIDevice.current.model
+        let systemVersion = UIDevice.current.systemVersion
+        let deviceName = UIDevice.current.name
+        
+        let subject = "My Dial App Comment & Review"
         let body = """
-        Suggestion: \(suggestionText)
+        Please share your personal review and any comments here:
+        
+        
         
         ---
+        Device Information:
+        • App Version: \(appVersion) (Build \(buildNumber))
+        • Device: \(deviceName) (\(deviceModel))
+        • iOS Version: \(systemVersion)
+        
         Sent from My Dial iOS App
         """
         
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
-        if let url = URL(string: "mailto:developer@mydialapp.com?subject=\(encodedSubject)&body=\(encodedBody)") {
-            UIApplication.shared.open(url) { success in
-                DispatchQueue.main.async {
-                    if success {
-                        emailAlertMessage = "Email app opened successfully! Please send your suggestion."
-                    } else {
-                        emailAlertMessage = "Could not open email app. Please contact us at developer@mydialapp.com"
-                    }
-                    showingEmailAlert = true
-                }
-            }
-        } else {
-            emailAlertMessage = "Could not create email. Please contact us at developer@mydialapp.com"
-            showingEmailAlert = true
+        if let url = URL(string: "mailto:apps@tvrgod.com?subject=\(encodedSubject)&body=\(encodedBody)") {
+            UIApplication.shared.open(url)
         }
     }
 }
@@ -2416,22 +2418,6 @@ struct InfoMenuView: View {
                 }
                 
                 MenuRow(
-                    icon: "info.circle",
-                    iconColor: .blue,
-                    title: "Version"
-                ) {
-                    dismiss()
-                    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-                    let alert = UIAlertController(title: "Version", message: "Version \(version) (Build \(build))", preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "OK", style: .default))
-                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                       let window = windowScene.windows.first {
-                        window.rootViewController?.present(alert, animated: true)
-                    }
-                }
-                
-                MenuRow(
                     icon: "person.circle",
                     iconColor: .blue,
                     title: "About"
@@ -2443,7 +2429,7 @@ struct InfoMenuView: View {
                 MenuRow(
                     icon: "lightbulb",
                     iconColor: .yellow,
-                    title: "Suggestions"
+                    title: "Comment"
                 ) {
                     dismiss()
                     showingSuggestions = true
