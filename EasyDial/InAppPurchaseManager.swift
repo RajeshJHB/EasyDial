@@ -9,6 +9,7 @@ class InAppPurchaseManager: ObservableObject {
     @Published var isLoading = false
     @Published var purchaseError: String?
     @Published var isPurchasing = false
+    @Published var purchaseSucceeded = false
     
     // Product IDs for your donation amounts (CONSUMABLE products)
     // You'll need to create these as CONSUMABLE products in App Store Connect
@@ -75,6 +76,7 @@ class InAppPurchaseManager: ObservableObject {
         
         isPurchasing = true
         purchaseError = nil
+        purchaseSucceeded = false
         
         do {
             let result = try await product.purchase()
@@ -82,6 +84,7 @@ class InAppPurchaseManager: ObservableObject {
             switch result {
             case .success(let verification):
                 await handleSuccessfulPurchase(verification: verification)
+                purchaseSucceeded = true
             case .userCancelled:
                 // User cancelled - no error needed
                 break

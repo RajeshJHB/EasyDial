@@ -10,6 +10,7 @@ import Contacts
 import UIKit
 import PhotosUI
 import MessageUI
+import UserNotifications
 
 // MARK: - Image Storage Manager
 
@@ -158,6 +159,8 @@ struct ContentView: View {
     @State private var showingHelp = false
     @State private var showingAbout = false
     @State private var showingSuggestions = false
+    @AppStorage("alwaysBringToFocus") private var alwaysBringToFocus = false
+    @State private var didEnterBackground = false
     private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
@@ -312,6 +315,9 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 contactsManager.requestAccess()
             }
+            
+            // Request notification permission
+            requestNotificationPermission()
         }
         .onChange(of: contactsManager.favorites) {
             // Load the last viewed contact index from UserDefaults when contacts are loaded
@@ -340,7 +346,107 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // Save the last viewed contact index when app goes to background
             UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
+            // Mark that we entered background
+            didEnterBackground = true
+            print("🔄 App entering background - didEnterBackground set to true")
+            print("🔄 Always Bring to Focus setting: \(alwaysBringToFocus)")
+            
+            // Send notification if feature is enabled
+            if alwaysBringToFocus {
+                scheduleReturnNotification()
+            }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            print("🔄 didBecomeActiveNotification received!")
+            print("🔄 didEnterBackground: \(didEnterBackground), alwaysBringToFocus: \(alwaysBringToFocus)")
+            
+            // Cancel any pending notifications when returning to app
+            cancelReturnNotification()
+            
+            // Handle returning from background
+            if didEnterBackground && alwaysBringToFocus {
+                print("🔄 App returning to foreground with 'Always Bring to Focus' enabled")
+                // Reset the flag
+                didEnterBackground = false
+                
+                // Force the app to show the contact detail view
+                // If we have a valid contact, ensure we're showing it
+                if lastViewedContactIndex >= 0 && lastViewedContactIndex < contactsManager.favorites.count {
+                    print("🔄 Ensuring contact detail view is visible for index: \(lastViewedContactIndex)")
+                    // The view should already be showing, but we can trigger a refresh
+                    showingContactDetail = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        showingContactDetail = true
+                    }
+                }
+            } else if didEnterBackground {
+                // Reset flag even if setting is disabled
+                didEnterBackground = false
+                print("🔄 App returning to foreground (Always Bring to Focus disabled)")
+            } else {
+                print("🔄 App became active but didn't enter background (fresh launch or other reason)")
+            }
+        }
+    }
+    
+    /// Request notification permissions
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                print("📱 Notification permission granted")
+            } else if let error = error {
+                print("❌ Notification permission error: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Schedule a notification to return to My Dial
+    private func scheduleReturnNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Return to My Dial"
+        content.body = "Tap to continue using My Dial"
+        content.sound = .default
+        content.categoryIdentifier = "RETURN_TO_APP"
+        
+        // Schedule first notification after 2 seconds
+        let firstTrigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+        let firstRequest = UNNotificationRequest(
+            identifier: "returnToMyDial_first",
+            content: content,
+            trigger: firstTrigger
+        )
+        
+        UNUserNotificationCenter.current().add(firstRequest) { error in
+            if let error = error {
+                print("❌ Failed to schedule first notification: \(error.localizedDescription)")
+            } else {
+                print("📱 First notification scheduled successfully (2 seconds)")
+            }
+        }
+        
+        // Schedule repeating notification every 60 seconds (Apple's minimum)
+        // This will start after the first one
+        let repeatingTrigger = UNTimeIntervalNotificationTrigger(timeInterval: 60, repeats: true)
+        let repeatingRequest = UNNotificationRequest(
+            identifier: "returnToMyDial_repeating",
+            content: content,
+            trigger: repeatingTrigger
+        )
+        
+        UNUserNotificationCenter.current().add(repeatingRequest) { error in
+            if let error = error {
+                print("❌ Failed to schedule repeating notification: \(error.localizedDescription)")
+            } else {
+                print("📱 Repeating notification scheduled successfully (every 60 seconds)")
+            }
+        }
+    }
+    
+    /// Cancel the return notification
+    private func cancelReturnNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["returnToMyDial_first", "returnToMyDial_repeating"])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["returnToMyDial_first", "returnToMyDial_repeating"])
+        print("📱 All notifications cancelled")
     }
     
     /// View shown when no favorites are available
@@ -2395,6 +2501,7 @@ struct InfoMenuView: View {
     @Binding var showingAbout: Bool
     @Binding var showingSuggestions: Bool
     @State private var showingDonationPopup = false
+    @AppStorage("alwaysBringToFocus") private var alwaysBringToFocus = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -2433,6 +2540,25 @@ struct InfoMenuView: View {
                 ) {
                     dismiss()
                     showingSuggestions = true
+                }
+                
+                // Settings Section
+                Section(header: Text("Settings")) {
+                    Toggle(isOn: $alwaysBringToFocus) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.up.forward.app")
+                                .foregroundColor(.green)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Always Bring to Focus")
+                                    .font(.body)
+                                Text("Return to My Dial after calls")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .green))
                 }
             }
             .navigationTitle("My Dial")
@@ -2580,13 +2706,22 @@ struct DonationPopupView: View {
         } message: {
             Text(purchaseSuccessMessage)
         }
-        .onReceive(purchaseManager.$isPurchasing) { isPurchasing in
-            // Only show success if we actually initiated a purchase and it completed successfully
-            if !isPurchasing && purchaseManager.purchaseError == nil && hasInitiatedPurchase {
+        .onReceive(purchaseManager.$purchaseSucceeded) { succeeded in
+            // Only show success if the purchase actually succeeded
+            if succeeded && hasInitiatedPurchase {
                 // Purchase completed successfully
                 purchaseSuccessMessage = "Thank you for your generous donation of \(formatAmount(selectedAmount))! Your support helps us improve My Dial."
                 showingPurchaseAlert = true
                 hasInitiatedPurchase = false // Reset the flag
+                // Reset the success flag for next time
+                purchaseManager.purchaseSucceeded = false
+            }
+        }
+        .onReceive(purchaseManager.$isPurchasing) { isPurchasing in
+            // Reset the initiated flag if user cancels (isPurchasing becomes false without success)
+            if !isPurchasing && !purchaseManager.purchaseSucceeded && purchaseManager.purchaseError == nil && hasInitiatedPurchase {
+                // User likely cancelled
+                hasInitiatedPurchase = false
             }
         }
     }
