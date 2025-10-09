@@ -93,21 +93,19 @@ enum CommunicationMethod: String, CaseIterable, Codable {
 }
 
 enum CommunicationApp: String, CaseIterable, Codable {
-    case phone = "Phone"
+    case phoneMessage = "Phone / Message"
     case whatsapp = "WhatsApp"
     case telegram = "Telegram"
-    case facetime = "FaceTime"
-    case messages = "Messages"
+    case facetime = "FaceTime / Message"
     case signal = "Signal"
     case viber = "Viber"
     
     var icon: String {
         switch self {
-        case .phone: return "phone.fill"
+        case .phoneMessage: return "phone.fill"
         case .whatsapp: return "message.fill"
         case .telegram: return "paperplane.fill"
         case .facetime: return "video.fill"
-        case .messages: return "message.fill"
         case .signal: return "message.fill"
         case .viber: return "message.fill"
         }
@@ -123,11 +121,10 @@ enum CommunicationApp: String, CaseIterable, Codable {
     
     var urlScheme: String {
         switch self {
-        case .phone: return "tel"
+        case .phoneMessage: return "tel"
         case .whatsapp: return "whatsapp"
         case .telegram: return "tg"
         case .facetime: return "facetime"
-        case .messages: return "sms"
         case .signal: return "sgnl"
         case .viber: return "viber"
         }
@@ -135,11 +132,10 @@ enum CommunicationApp: String, CaseIterable, Codable {
     
     var bundleIdentifier: String {
         switch self {
-        case .phone: return "com.apple.mobilephone"
+        case .phoneMessage: return "com.apple.mobilephone"
         case .whatsapp: return "net.whatsapp.WhatsApp"
         case .telegram: return "ph.telegra.Telegraph"
         case .facetime: return "com.apple.facetime"
-        case .messages: return "com.apple.MobileSMS"
         case .signal: return "org.whispersystems.signal"
         case .viber: return "com.viber"
         }
@@ -626,16 +622,16 @@ struct FavoriteContactRow: View {
         
         
         switch (favorite.communicationMethod, favorite.communicationApp) {
-        case (.voiceCall, .phone):
+        case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)" // Use original format to avoid prompts
-        case (.videoCall, .phone):
+        case (.videoCall, .phoneMessage):
             urlString = "facetime:\(phoneNumber)"
-        case (.textMessage, .messages):
+        case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
             urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
         case (.videoCall, .whatsapp):
-            urlString = "whatsapp://send?phone=\(phoneNumber)"
+            urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
         case (.textMessage, .whatsapp):
             urlString = "whatsapp://send?phone=\(phoneNumber)"
         case (.voiceCall, .telegram):
@@ -662,12 +658,6 @@ struct FavoriteContactRow: View {
             urlString = "viber://chat?number=\(phoneNumber)"
         case (.textMessage, .viber):
             urlString = "viber://chat?number=\(phoneNumber)"
-        case (.textMessage, .phone):
-            // Handle legacy contacts that have Text Message + Phone (invalid combination)
-            urlString = "sms:\(phoneNumber)"
-        default:
-            // Fallback to phone call
-            urlString = "tel:\(phoneNumber)"
         }
         
         if let url = URL(string: urlString) {
@@ -1268,7 +1258,7 @@ class ContactsManager: ObservableObject {
                         phoneNumber: phoneNumber,
                         displayName: displayName,
                         communicationMethod: CommunicationMethod(rawValue: item["communicationMethod"] as? String ?? "Voice Call") ?? .voiceCall,
-                        communicationApp: CommunicationApp(rawValue: item["communicationApp"] as? String ?? "Phone") ?? .phone,
+                        communicationApp: CommunicationApp(rawValue: item["communicationApp"] as? String ?? "Phone") ?? .phoneMessage,
                         customImageData: customImageData
                     )
                     
@@ -1428,14 +1418,8 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         if let app = communicationApp {
             self.communicationApp = app
         } else {
-            switch communicationMethod {
-            case .voiceCall:
-                self.communicationApp = .phone
-            case .videoCall:
-                self.communicationApp = .phone
-            case .textMessage:
-                self.communicationApp = .messages
-            }
+            // Default to Phone / Message for all communication methods
+            self.communicationApp = .phoneMessage
         }
     }
     
@@ -1445,7 +1429,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         phoneNumber = try container.decode(String.self, forKey: .phoneNumber)
         displayName = try container.decode(String.self, forKey: .displayName)
         communicationMethod = try container.decodeIfPresent(CommunicationMethod.self, forKey: .communicationMethod) ?? .voiceCall
-        communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phone
+        communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phoneMessage
         customImageFileName = try container.decodeIfPresent(String.self, forKey: .customImageFileName)
         contactGivenName = try container.decodeIfPresent(String.self, forKey: .contactGivenName) ?? ""
         contactFamilyName = try container.decodeIfPresent(String.self, forKey: .contactFamilyName) ?? ""
@@ -1510,10 +1494,9 @@ class AppDetectionUtility {
         print("🚀 Starting app detection...")
         var installedApps: [CommunicationApp] = []
         
-        // Always include Phone and Messages as they're built into iOS
-        installedApps.append(.phone)
-        installedApps.append(.messages)
-        print("✅ Added built-in apps: Phone, Messages")
+        // Always include Phone / Message as it's built into iOS
+        installedApps.append(.phoneMessage)
+        print("✅ Added built-in app: Phone / Message")
         
         // Check for other installed apps
         let otherApps: [CommunicationApp] = [.whatsapp, .telegram, .facetime, .signal, .viber]
@@ -1699,7 +1682,7 @@ struct CommunicationConfigView: View {
         
         // Ensure selected app is available, otherwise select first available
         if !availableApps.contains(selectedApp) {
-            selectedApp = availableApps.first ?? .phone
+            selectedApp = availableApps.first ?? .phoneMessage
         }
     }
 }
@@ -2116,16 +2099,16 @@ struct ContactDetailPage: View {
         var urlString: String
         
         switch (favorite.communicationMethod, favorite.communicationApp) {
-        case (.voiceCall, .phone):
+        case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)"
-        case (.videoCall, .phone):
+        case (.videoCall, .phoneMessage):
             urlString = "facetime:\(phoneNumber)"
-        case (.textMessage, .messages):
+        case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
             urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
         case (.videoCall, .whatsapp):
-            urlString = "whatsapp://send?phone=\(phoneNumber)"
+            urlString = "whatsapp://calluser/?phone=\(phoneNumber)"
         case (.textMessage, .whatsapp):
             urlString = "whatsapp://send?phone=\(phoneNumber)"
         case (.voiceCall, .telegram):
@@ -2152,10 +2135,6 @@ struct ContactDetailPage: View {
             urlString = "viber://chat?number=\(phoneNumber)"
         case (.textMessage, .viber):
             urlString = "viber://chat?number=\(phoneNumber)"
-        case (.textMessage, .phone):
-            urlString = "sms:\(phoneNumber)"
-        default:
-            urlString = "tel:\(phoneNumber)"
         }
         
         if let url = URL(string: urlString) {
