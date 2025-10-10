@@ -11,6 +11,45 @@ import UIKit
 import PhotosUI
 import MessageUI
 import UserNotifications
+import CallKit
+
+// MARK: - Call Detector
+
+class CallDetector: NSObject, ObservableObject {
+    static let shared = CallDetector()
+    private let callObserver = CXCallObserver()
+    
+    @Published var isOnCall: Bool = false
+    
+    private override init() {
+        super.init()
+        callObserver.setDelegate(self, queue: DispatchQueue.main)
+    }
+    
+    var hasActiveCall: Bool {
+        return callObserver.calls.contains { !$0.hasEnded }
+    }
+}
+
+extension CallDetector: CXCallObserverDelegate {
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        let wasOnCall = isOnCall
+        isOnCall = callObserver.calls.contains { !$0.hasEnded }
+        
+        print("📞 Call state changed:")
+        print("  - Has ended: \(call.hasEnded)")
+        print("  - Is outgoing: \(call.isOutgoing)")
+        print("  - On hold: \(call.isOnHold)")
+        print("  - Has connected: \(call.hasConnected)")
+        print("  - Currently on call: \(isOnCall)")
+        
+        // If call just ended and we were waiting to send notifications
+        if wasOnCall && !isOnCall {
+            print("📞 Call ended - checking if we need to send notifications")
+            NotificationCenter.default.post(name: NSNotification.Name("CallEnded"), object: nil)
+        }
+    }
+}
 
 // MARK: - Image Storage Manager
 
@@ -145,6 +184,7 @@ enum CommunicationApp: String, CaseIterable, Codable {
 /// Main view that displays favorites from the Contacts app
 struct ContentView: View {
     @StateObject private var contactsManager = ContactsManager()
+    @StateObject private var callDetector = CallDetector.shared
     @State private var showingAddToFavorites = false
     @State private var isEditMode = false
     @State private var currentContactIndex = 0
@@ -157,6 +197,14 @@ struct ContentView: View {
     @State private var showingSuggestions = false
     @AppStorage("alwaysBringToFocus") private var alwaysBringToFocus = false
     @State private var didEnterBackground = false
+    @State private var waitingForCallToEnd = false
+    
+    // Detection variables for screen lock vs app switch
+    @State private var didResignActive = false
+    @State private var didSeeInactive = false
+    @State private var switchedToAnotherApp = false
+    @Environment(\.scenePhase) private var scenePhase
+    
     private let lastViewedContactKey = "lastViewedContactIndex"
     
     var body: some View {
@@ -339,21 +387,70 @@ struct ContentView: View {
             // Mark that we've loaded the initial index
             hasLoadedInitialIndex = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            // Save the last viewed contact index when app goes to background
-            UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
-            // Mark that we entered background
-            didEnterBackground = true
-            print("🔄 App entering background - didEnterBackground set to true")
-            print("🔄 Always Bring to Focus setting: \(alwaysBringToFocus)")
-            
-            // Send notification if feature is enabled
-            if alwaysBringToFocus {
-                scheduleReturnNotification()
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            switch newPhase {
+            case .active:
+                print("🟢 Screen is ACTIVE - App is in foreground")
+                // Reset flags when becoming active
+                didResignActive = false
+                didSeeInactive = false
+            case .inactive:
+                print("🟡 Screen is INACTIVE - App is transitioning")
+                // Mark that we saw the INACTIVE state
+                didSeeInactive = true
+            case .background:
+                print("🔴 Screen is OFF/BACKGROUND - App went to background or screen locked")
+                // Display switchedToAnotherApp state after background message
+                print("📊 switchedToAnotherApp = \(switchedToAnotherApp)")
+            @unknown default:
+                print("⚪️ Unknown screen state")
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            print("⚠️ App will resign active - Screen is resigning notification")
+            // Save the last viewed contact index when app becomes inactive
+            UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
+            // Mark that we've received the willResignActive notification
+            didResignActive = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            print("🌙 App entered background - Screen is in background notification")
+            
+            // Check the sequence to determine if user switched to another app
+            if didResignActive {
+                if didSeeInactive {
+                    // Sequence: willResignActive → INACTIVE → didEnterBackground
+                    switchedToAnotherApp = true
+                    print("✅ Sequence: willResignActive → INACTIVE → didEnterBackground → switchedToAnotherApp = true")
+                } else {
+                    // Sequence: willResignActive → didEnterBackground (no INACTIVE)
+                    switchedToAnotherApp = false
+                    print("✅ Sequence: willResignActive → didEnterBackground (no INACTIVE) → switchedToAnotherApp = false (screen lock)")
+                }
+            }
+            
+            // Only send notifications if user actually switched to another app
+            if switchedToAnotherApp && alwaysBringToFocus {
+                didEnterBackground = true
+                
+                // Check if user is on a call
+                if callDetector.isOnCall {
+                    print("📞 User is on a call - will send notifications after call ends")
+                    waitingForCallToEnd = true
+                } else {
+                    print("📱 User switched to another app (not on call) - sending notifications")
+                    scheduleReturnNotification()
+                }
+            } else if !switchedToAnotherApp {
+                print("🔒 Screen locked (no app switch) - NOT sending notifications")
+            }
+            
+            // Reset flags
+            didResignActive = false
+            didSeeInactive = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            print("🔄 didBecomeActiveNotification received!")
+            print("☀️ App became active - Screen is ON and app is in foreground")
             print("🔄 didEnterBackground: \(didEnterBackground), alwaysBringToFocus: \(alwaysBringToFocus)")
             
             // Cancel any pending notifications when returning to app
@@ -362,25 +459,39 @@ struct ContentView: View {
             // Handle returning from background
             if didEnterBackground && alwaysBringToFocus {
                 print("🔄 App returning to foreground with 'Always Bring to Focus' enabled")
-                // Reset the flag
+                print("🔄 Current view should show contact at index: \(lastViewedContactIndex)")
+                // Reset the flags
                 didEnterBackground = false
+                waitingForCallToEnd = false
                 
-                // Force the app to show the contact detail view
-                // If we have a valid contact, ensure we're showing it
-                if lastViewedContactIndex >= 0 && lastViewedContactIndex < contactsManager.favorites.count {
-                    print("🔄 Ensuring contact detail view is visible for index: \(lastViewedContactIndex)")
-                    // The view should already be showing, but we can trigger a refresh
-                    showingContactDetail = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        showingContactDetail = true
-                    }
-                }
+                // The contact detail view should already be showing the correct contact
+                // No need to toggle showingContactDetail - just let it stay as is
             } else if didEnterBackground {
-                // Reset flag even if setting is disabled
+                // Reset flags even if setting is disabled
                 didEnterBackground = false
+                waitingForCallToEnd = false
                 print("🔄 App returning to foreground (Always Bring to Focus disabled)")
-            } else {
-                print("🔄 App became active but didn't enter background (fresh launch or other reason)")
+            }
+            
+            // Reset detection flags
+            didResignActive = false
+            didSeeInactive = false
+            switchedToAnotherApp = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            print("🌅 App will enter foreground - Screen turning ON or returning to app")
+            // Reset flags
+            didResignActive = false
+            didSeeInactive = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CallEnded"))) { _ in
+            print("📞 Call ended notification received")
+            
+            // If we were waiting for call to end and still in background, send notifications now
+            if waitingForCallToEnd && didEnterBackground && alwaysBringToFocus {
+                print("📱 Call ended - now sending notifications")
+                waitingForCallToEnd = false
+                scheduleReturnNotification()
             }
         }
     }
