@@ -539,6 +539,18 @@ struct FavoriteContactRow: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
+                // Show email address if available
+                if let email = favorite.emailAddress, !email.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "envelope.fill")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                        Text(email)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
                 // Show communication method and app
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
@@ -608,14 +620,17 @@ struct FavoriteContactRow: View {
     
     /// Initiates communication based on the selected method and app
     private func initiateCommunication() {
-        // Clean the phone number for tel: and facetime: schemes - keep only digits, +, and -
-        let cleanPhoneNumber = favorite.phoneNumber.replacingOccurrences(of: " ", with: "")
-                                                   .replacingOccurrences(of: "(", with: "")
-                                                   .replacingOccurrences(of: ")", with: "")
-                                                   .replacingOccurrences(of: "-", with: "")
-                                                   .replacingOccurrences(of: ".", with: "")
+        // For FaceTime, use email address if available, otherwise use phone number
+        let facetimeIdentifier: String
+        if let email = favorite.emailAddress, !email.isEmpty, (favorite.communicationApp == .facetime || favorite.communicationApp == .phoneMessage) {
+            facetimeIdentifier = email
+        } else {
+            let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
+            facetimeIdentifier = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        }
         
-        // Remove the '+' sign from the phone number for URL schemes
+        // Clean the phone number for other apps
+        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
         let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
         
         var urlString: String
@@ -625,7 +640,7 @@ struct FavoriteContactRow: View {
         case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)" // Use original format to avoid prompts
         case (.videoCall, .phoneMessage):
-            urlString = "facetime:\(phoneNumber)"
+            urlString = "facetime:\(facetimeIdentifier)"
         case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
@@ -641,9 +656,9 @@ struct FavoriteContactRow: View {
         case (.textMessage, .telegram):
             urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime-audio:\(phoneNumber)"
+            urlString = "facetime-audio:\(facetimeIdentifier)"
         case (.videoCall, .facetime):
-            urlString = "facetime:\(phoneNumber)"
+            urlString = "facetime:\(facetimeIdentifier)"
         case (.textMessage, .facetime):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .signal):
@@ -738,21 +753,38 @@ struct AddToFavoritesView: View {
                     Button("Done") {
                         // Add all selected contacts to favorites
                         for selectedId in selectedContacts {
-                            // Check if it's a single contact (no underscore) or individual phone number (has underscore)
-                            if selectedId.contains("_") {
+                            // Check if it's a single contact or individual phone/email selection
+                            if selectedId.contains("_phone_") {
                                 // Individual phone number selection
                                 let components = selectedId.split(separator: "_")
-                                if components.count == 2,
-                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }),
-                                   let phoneNumber = contact.phoneNumbers.first(where: { $0.identifier == String(components[1]) }) {
-                                    contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber.value.stringValue)
+                                if components.count >= 3,
+                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
+                                    let phoneId = components[2...].joined(separator: "_")
+                                    if let phoneNumber = contact.phoneNumbers.first(where: { $0.identifier == phoneId }) {
+                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber.value.stringValue, emailAddress: nil)
+                                    }
+                                }
+                            } else if selectedId.contains("_email_") {
+                                // Individual email selection
+                                let components = selectedId.split(separator: "_")
+                                if components.count >= 3,
+                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
+                                    let emailId = components[2...].joined(separator: "_")
+                                    if let email = contact.emailAddresses.first(where: { $0.identifier == emailId }) {
+                                        // For email-only contacts, use email as the "phone number" placeholder
+                                        let emailString = email.value as String
+                                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
+                                    }
                                 }
                             } else {
-                                // Single contact selection
+                                // Single contact selection (no underscore)
                                 if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
                                     if contact.phoneNumbers.count == 1,
                                        let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
-                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber)
+                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber, emailAddress: nil)
+                                    } else if contact.emailAddresses.count == 1 {
+                                        let emailString = contact.emailAddresses.first?.value as String? ?? ""
+                                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
                                     }
                                 }
                             }
@@ -795,6 +827,10 @@ struct ContactRow: View {
     @Binding var selectedContacts: Set<String>
     @State private var isSelected: Bool = false
     
+    private var totalContactMethods: Int {
+        contact.phoneNumbers.count + contact.emailAddresses.count
+    }
+    
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 16) {
@@ -808,12 +844,16 @@ struct ContactRow: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    if contact.phoneNumbers.count == 1 {
+                    if totalContactMethods == 1 && contact.phoneNumbers.count == 1 {
                         Text(contact.phoneNumbers.first?.value.stringValue ?? "")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                    } else if totalContactMethods == 1 && contact.emailAddresses.count == 1 {
+                        Text(contact.emailAddresses.first?.value as String? ?? "")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     } else {
-                        Text("\(contact.phoneNumbers.count) phone numbers")
+                        Text("\(contact.phoneNumbers.count) phone\(contact.phoneNumbers.count == 1 ? "" : "s"), \(contact.emailAddresses.count) email\(contact.emailAddresses.count == 1 ? "" : "s")")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -823,9 +863,19 @@ struct ContactRow: View {
                 
                 // Select/Toggle button
                 Button {
-                    if contact.phoneNumbers.count == 1 {
-                        // Single number - toggle selection (visual only)
-                        if contact.phoneNumbers.first?.value.stringValue != nil {
+                    if totalContactMethods == 1 {
+                        // Single contact method - toggle selection (visual only)
+                        if contact.phoneNumbers.count == 1 && contact.phoneNumbers.first?.value.stringValue != nil {
+                            if isSelected {
+                                // Already selected - unselect
+                                isSelected = false
+                                selectedContacts.remove(contact.identifier)
+                            } else {
+                                // Not selected - select (will be added to favorites when session ends)
+                                isSelected = true
+                                selectedContacts.insert(contact.identifier)
+                            }
+                        } else if contact.emailAddresses.count == 1 {
                             if isSelected {
                                 // Already selected - unselect
                                 isSelected = false
@@ -837,20 +887,20 @@ struct ContactRow: View {
                             }
                         }
                     }
-                    // For multiple numbers, users must select individual numbers below
+                    // For multiple contact methods, users must select individual ones below
                 } label: {
-                    Image(systemName: contact.phoneNumbers.count == 1 ? (isSelected ? "star.fill" : "star") : "star.circle")
-                        .foregroundColor(contact.phoneNumbers.count == 1 ? (isSelected ? .yellow : .gray) : .gray)
+                    Image(systemName: totalContactMethods == 1 ? (isSelected ? "star.fill" : "star") : "star.circle")
+                        .foregroundColor(totalContactMethods == 1 ? (isSelected ? .yellow : .gray) : .gray)
                         .font(.title2)
                 }
-                .accessibilityLabel(contact.phoneNumbers.count == 1 ? "Add to favorites" : "Select individual numbers below")
-                .disabled(contact.phoneNumbers.count > 1)
+                .accessibilityLabel(totalContactMethods == 1 ? "Add to favorites" : "Select individual contact methods below")
+                .disabled(totalContactMethods > 1)
             }
             
-            // Show all phone numbers if multiple
-            if contact.phoneNumbers.count > 1 {
+            // Show all phone numbers and emails if multiple contact methods
+            if totalContactMethods > 1 {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Tap stars to add/remove numbers:")
+                    Text("Tap stars to add/remove:")
                         .font(.caption)
                         .foregroundColor(.blue)
                         .padding(.leading, 56)
@@ -863,7 +913,17 @@ struct ContactRow: View {
                             contactsManager: contactsManager,
                             selectedContacts: $selectedContacts
                         )
-                        .id("\(contact.identifier)_\(phoneNumber.identifier)")
+                        .id("\(contact.identifier)_phone_\(phoneNumber.identifier)")
+                    }
+                    
+                    ForEach(contact.emailAddresses, id: \.identifier) { email in
+                        EmailAddressRow(
+                            contact: contact,
+                            email: email,
+                            contactsManager: contactsManager,
+                            selectedContacts: $selectedContacts
+                        )
+                        .id("\(contact.identifier)_email_\(email.identifier)")
                     }
                 }
                 .padding(.top, 8)
@@ -887,10 +947,15 @@ struct PhoneNumberRow: View {
     
     var body: some View {
         HStack {
-            Text(phoneString)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.leading, 56)
+            HStack(spacing: 8) {
+                Image(systemName: "phone.fill")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                Text(phoneString)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.leading, 56)
             
             Spacer()
             
@@ -898,13 +963,67 @@ struct PhoneNumberRow: View {
                 if isSelected {
                     // Already selected - unselect
                     isSelected = false
-                    let phoneId = "\(contact.identifier)_\(phoneNumber.identifier)"
+                    let phoneId = "\(contact.identifier)_phone_\(phoneNumber.identifier)"
                     selectedContacts.remove(phoneId)
                 } else {
                     // Not selected - select (will be added to favorites when session ends)
                     isSelected = true
-                    let phoneId = "\(contact.identifier)_\(phoneNumber.identifier)"
+                    let phoneId = "\(contact.identifier)_phone_\(phoneNumber.identifier)"
                     selectedContacts.insert(phoneId)
+                }
+            }) {
+                Image(systemName: isSelected ? "star.fill" : "star")
+                    .foregroundColor(isSelected ? .yellow : .gray)
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
+    }
+}
+
+/// Row view for individual email address selection (for FaceTime)
+struct EmailAddressRow: View {
+    let contact: CNContact
+    let email: CNLabeledValue<NSString>
+    @ObservedObject var contactsManager: ContactsManager
+    @Binding var selectedContacts: Set<String>
+    @State private var isSelected: Bool = false
+    
+    private var emailString: String {
+        email.value as String
+    }
+    
+    var body: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Image(systemName: "envelope.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                Text(emailString)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.leading, 56)
+            
+            Spacer()
+            
+            Button(action: {
+                if isSelected {
+                    // Already selected - unselect
+                    isSelected = false
+                    let emailId = "\(contact.identifier)_email_\(email.identifier)"
+                    selectedContacts.remove(emailId)
+                } else {
+                    // Not selected - select (will be added to favorites when session ends)
+                    isSelected = true
+                    let emailId = "\(contact.identifier)_email_\(email.identifier)"
+                    selectedContacts.insert(emailId)
                 }
             }) {
                 Image(systemName: isSelected ? "star.fill" : "star")
@@ -1160,6 +1279,7 @@ class ContactsManager: ObservableObject {
             CNContactGivenNameKey as CNKeyDescriptor,
             CNContactFamilyNameKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
             CNContactImageDataKey as CNKeyDescriptor,
             CNContactThumbnailImageDataKey as CNKeyDescriptor
         ])
@@ -1309,11 +1429,12 @@ class ContactsManager: ObservableObject {
     }
     
     /// Adds a contact to favorites with a specific phone number
-    func addToFavorites(contact: CNContact, phoneNumber: String) {
+    func addToFavorites(contact: CNContact, phoneNumber: String, emailAddress: String? = nil) {
         let favorite = FavoriteContact(
             contact: contact,
             phoneNumber: phoneNumber,
-            displayName: "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+            displayName: "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces),
+            emailAddress: emailAddress
         )
         
         // Always add the favorite (allow duplicates)
@@ -1324,7 +1445,7 @@ class ContactsManager: ObservableObject {
     /// Legacy method for backward compatibility
     func addToFavorites(contact: CNContact) {
         guard let phoneNumber = contact.phoneNumbers.first?.value.stringValue else { return }
-        addToFavorites(contact: contact, phoneNumber: phoneNumber)
+        addToFavorites(contact: contact, phoneNumber: phoneNumber, emailAddress: nil)
     }
     
     /// Removes a contact from favorites
@@ -1370,13 +1491,15 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
     var communicationApp: CommunicationApp
     // Optional custom avatar image file name (stored in file system)
     var customImageFileName: String?
+    // Optional email address for FaceTime calls
+    var emailAddress: String?
     
     // Store basic contact info separately to avoid large CNContact in UserDefaults
     let contactGivenName: String
     let contactFamilyName: String
     
     enum CodingKeys: String, CodingKey {
-        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageFileName, contactGivenName, contactFamilyName
+        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageFileName, contactGivenName, contactFamilyName, emailAddress
         // Note: CNContact is NOT included in CodingKeys to avoid large data in UserDefaults
     }
     
@@ -1388,6 +1511,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
                 CNContactGivenNameKey as CNKeyDescriptor,
                 CNContactFamilyNameKey as CNKeyDescriptor,
                 CNContactPhoneNumbersKey as CNKeyDescriptor,
+                CNContactEmailAddressesKey as CNKeyDescriptor,
                 CNContactImageDataKey as CNKeyDescriptor,
                 CNContactThumbnailImageDataKey as CNKeyDescriptor
                 // Note: We fetch image data here since it's only for display, not storage
@@ -1399,13 +1523,14 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         }
     }
     
-    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil, customImageData: Data? = nil) {
+    init(contact: CNContact, phoneNumber: String, displayName: String, communicationMethod: CommunicationMethod = .voiceCall, communicationApp: CommunicationApp? = nil, customImageData: Data? = nil, emailAddress: String? = nil) {
         self.contactIdentifier = contact.identifier
         self.phoneNumber = phoneNumber
         self.displayName = displayName
         self.communicationMethod = communicationMethod
         self.contactGivenName = contact.givenName
         self.contactFamilyName = contact.familyName
+        self.emailAddress = emailAddress
         
         // Save custom image to file system if provided
         if let imageData = customImageData {
@@ -1433,6 +1558,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         customImageFileName = try container.decodeIfPresent(String.self, forKey: .customImageFileName)
         contactGivenName = try container.decodeIfPresent(String.self, forKey: .contactGivenName) ?? ""
         contactFamilyName = try container.decodeIfPresent(String.self, forKey: .contactFamilyName) ?? ""
+        emailAddress = try container.decodeIfPresent(String.self, forKey: .emailAddress)
         
         // Handle migration from old customImageData format
         // Note: We can't access the old key since it's not in CodingKeys anymore
@@ -1451,6 +1577,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(customImageFileName, forKey: .customImageFileName)
         try container.encode(contactGivenName, forKey: .contactGivenName)
         try container.encode(contactFamilyName, forKey: .contactFamilyName)
+        try container.encodeIfPresent(emailAddress, forKey: .emailAddress)
     }
     
     // MARK: - Equatable
@@ -2049,6 +2176,20 @@ struct ContactDetailPage: View {
                     .padding(.horizontal)
                     .padding(.top, 10)
                 
+                // Email Address - Show if available
+                if let email = favorite.emailAddress, !email.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "envelope.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text(email)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                }
+                
                 // Settings Button - Below phone number showing dial method
                 Button(action: {
                     print("🔍 CALL METHOD TAPPED - Initiating dial!")
@@ -2093,6 +2234,15 @@ struct ContactDetailPage: View {
     
     /// Initiates communication with the current favorite's settings
     private func initiateCommunication() {
+        // For FaceTime, use email address if available, otherwise use phone number
+        let facetimeIdentifier: String
+        if let email = favorite.emailAddress, !email.isEmpty, (favorite.communicationApp == .facetime || favorite.communicationApp == .phoneMessage) {
+            facetimeIdentifier = email
+        } else {
+            let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
+            facetimeIdentifier = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        }
+        
         let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
         let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
         
@@ -2102,7 +2252,7 @@ struct ContactDetailPage: View {
         case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)"
         case (.videoCall, .phoneMessage):
-            urlString = "facetime:\(phoneNumber)"
+            urlString = "facetime:\(facetimeIdentifier)"
         case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
@@ -2118,9 +2268,9 @@ struct ContactDetailPage: View {
         case (.textMessage, .telegram):
             urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime-audio:\(phoneNumber)"
+            urlString = "facetime-audio:\(facetimeIdentifier)"
         case (.videoCall, .facetime):
-            urlString = "facetime:\(phoneNumber)"
+            urlString = "facetime:\(facetimeIdentifier)"
         case (.textMessage, .facetime):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .signal):
@@ -2225,7 +2375,7 @@ struct HelpView: View {
                         
                         HelpSection(
                             title: "Calling with FaceTime / Message",
-                            content: "Message, voice, and video calls are supported. Messages use the native 'Messages' app. FaceTime voice and video calls are only available if the contact's number is FaceTime-enabled."
+                            content: "Message, voice, and video calls are supported. Messages use the native 'Messages' app. FaceTime voice and video calls can be made using either a phone number or email address. When adding a contact, you can select an email address for FaceTime calls if the contact has FaceTime enabled on their email."
                         )
                         
                         HelpSection(
