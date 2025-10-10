@@ -620,18 +620,39 @@ struct FavoriteContactRow: View {
     
     /// Initiates communication based on the selected method and app
     private func initiateCommunication() {
-        // For FaceTime, use email address if available, otherwise use phone number
-        let facetimeIdentifier: String
+        // For FaceTime, use email address if available, otherwise clean the phone number
+        let phoneNumber: String
+        var isEmail = false
+        
         if let email = favorite.emailAddress, !email.isEmpty, (favorite.communicationApp == .facetime || favorite.communicationApp == .phoneMessage) {
-            facetimeIdentifier = email
+            // Use email address as-is for FaceTime
+            phoneNumber = email
+            isEmail = true
         } else {
+            // Clean the phone number - keep only digits and +, then remove +
             let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
-            facetimeIdentifier = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+            phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+            isEmail = false
         }
         
-        // Clean the phone number for other apps
-        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
-        let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        // Validate: Email addresses cannot be used with certain apps
+        if isEmail && (favorite.communicationApp == .phoneMessage || favorite.communicationApp == .whatsapp || favorite.communicationApp == .telegram || favorite.communicationApp == .signal || favorite.communicationApp == .viber) {
+            // Show alert to user
+            DispatchQueue.main.async {
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let viewController = windowScene.windows.first?.rootViewController {
+                    let alert = UIAlertController(
+                        title: "Cannot Make Call",
+                        message: "Email addresses cannot be used with \(favorite.communicationApp.displayName). Please use FaceTime for email-based calls, or add a phone number for this contact.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    viewController.present(alert, animated: true)
+                }
+            }
+            print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
+            return // Exit without processing
+        }
         
         var urlString: String
         
@@ -640,7 +661,7 @@ struct FavoriteContactRow: View {
         case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)" // Use original format to avoid prompts
         case (.videoCall, .phoneMessage):
-            urlString = "facetime:\(facetimeIdentifier)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
@@ -656,9 +677,9 @@ struct FavoriteContactRow: View {
         case (.textMessage, .telegram):
             urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime-audio:\(facetimeIdentifier)"
+            urlString = "facetime-audio:\(phoneNumber)"
         case (.videoCall, .facetime):
-            urlString = "facetime:\(facetimeIdentifier)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .facetime):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .signal):
@@ -2234,17 +2255,39 @@ struct ContactDetailPage: View {
     
     /// Initiates communication with the current favorite's settings
     private func initiateCommunication() {
-        // For FaceTime, use email address if available, otherwise use phone number
-        let facetimeIdentifier: String
+        // For FaceTime, use email address if available, otherwise clean the phone number
+        let phoneNumber: String
+        var isEmail = false
+        
         if let email = favorite.emailAddress, !email.isEmpty, (favorite.communicationApp == .facetime || favorite.communicationApp == .phoneMessage) {
-            facetimeIdentifier = email
+            // Use email address as-is for FaceTime
+            phoneNumber = email
+            isEmail = true
         } else {
+            // Clean the phone number - keep only digits and +, then remove +
             let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
-            facetimeIdentifier = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+            phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+            isEmail = false
         }
         
-        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
-        let phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
+        // Validate: Email addresses cannot be used with certain apps
+        if isEmail && (favorite.communicationApp == .phoneMessage || favorite.communicationApp == .whatsapp || favorite.communicationApp == .telegram || favorite.communicationApp == .signal || favorite.communicationApp == .viber) {
+            // Show alert to user
+            DispatchQueue.main.async {
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let viewController = windowScene.windows.first?.rootViewController {
+                    let alert = UIAlertController(
+                        title: "Cannot Make Call",
+                        message: "Email addresses cannot be used with \(favorite.communicationApp.displayName). Please use FaceTime for email-based calls, or add a phone number for this contact.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    viewController.present(alert, animated: true)
+                }
+            }
+            print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
+            return // Exit without processing
+        }
         
         var urlString: String
         
@@ -2252,7 +2295,7 @@ struct ContactDetailPage: View {
         case (.voiceCall, .phoneMessage):
             urlString = "tel:\(favorite.phoneNumber)"
         case (.videoCall, .phoneMessage):
-            urlString = "facetime:\(facetimeIdentifier)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .phoneMessage):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .whatsapp):
@@ -2268,9 +2311,9 @@ struct ContactDetailPage: View {
         case (.textMessage, .telegram):
             urlString = "tg://resolve?domain=\(phoneNumber)"
         case (.voiceCall, .facetime):
-            urlString = "facetime-audio:\(facetimeIdentifier)"
+            urlString = "facetime-audio:\(phoneNumber)"
         case (.videoCall, .facetime):
-            urlString = "facetime:\(facetimeIdentifier)"
+            urlString = "facetime:\(phoneNumber)"
         case (.textMessage, .facetime):
             urlString = "sms:\(phoneNumber)"
         case (.voiceCall, .signal):
@@ -2370,37 +2413,37 @@ struct HelpView: View {
                         
                         HelpSection(
                             title: "Calling with Phone / Message (Built-in iPhone Apps)",
-                            content: "Message, voice, and video calls are supported. Video calls are made via FaceTime if available on the contact's device."
+                            content: "• Message, voice, and video calls are supported\n• Video calls are made via FaceTime if available on the contact's device"
                         )
                         
                         HelpSection(
                             title: "Calling with FaceTime / Message",
-                            content: "Message, voice, and video calls are supported. Messages use the native 'Messages' app. FaceTime voice and video calls can be made using either a phone number or email address. When adding a contact, you can select an email address for FaceTime calls if the contact has FaceTime enabled on their email."
+                            content: "• Message, voice, and video calls are supported\n• Messages use the native 'Messages' app\n• FaceTime voice and video calls can be made using either a phone number or email address\n• When adding a contact, you can select an email address for FaceTime calls if the contact has FaceTime enabled on their email"
                         )
                         
                         HelpSection(
                             title: "Calling with WhatsApp",
-                            content: "When making a WhatsApp video call, a WhatsApp voice call will be initiated. Once connected, you can tap the camera icon within WhatsApp to switch to video mode."
+                            content: "• When making a WhatsApp video call, a WhatsApp voice call will be initiated\n• Once connected, tap the camera icon within WhatsApp to switch to video mode"
                         )
                         
                         HelpSection(
                             title: "Other Supported Apps",
-                            content: "Telegram, Signal, and Viber: All call methods to these apps open the app in message mode."
+                            content: "• Telegram, Signal, and Viber are supported\n• All call methods to these apps open the app in message mode"
                         )
                         
                         HelpSection(
                             title: "Always in Focus",
-                            content: "When using this app for elders or differently-abled people, there are two ways to ensure the app is always available and in focus:"
+                            content: "• When using this app for elders or differently-abled people, there are two ways to ensure the app is always available and in focus"
                         )
                         
                         HelpSection(
                             title: "Option 1: Enable Notification Reminders",
-                            content: "Enable the 'Always Bring to Focus' setting in the info menu (tap the 'i' icon). When the app is out of focus or closed, you will receive a notification reminder saying 'Return to My Dial'. Tap the notification to return to the app."
+                            content: "• Enable the 'Always Bring to Focus' setting in the info menu (tap the 'i' icon)\n• When the app is out of focus or closed, you will receive a notification reminder saying 'Return to My Dial'\n• Tap the notification to return to the app"
                         )
                         
                         HelpSection(
                             title: "Option 2: Use NFC Tag (requires NFC tag purchase)",
-                            content: "Step 1: Create a shortcut in the 'Shortcuts' app:\n• Tap '+ New Shortcut'\n• Choose 'Open App'\n• Select 'My Dial' app\n\nStep 2: Create an NFC automation:\n• In the 'Shortcuts' app, choose 'Automation'\n• Tap 'New Automation' → 'NFC'\n• Enable 'Run Immediately'\n• Tap 'Scan', then place the NFC tag near the top of your phone\n• When you get a success message, name the tag (e.g., 'Easy Dial')\n• Tap 'Next'\n• Select the 'Open App' shortcut created in Step 1\n\nOnce set up, whenever the user touches the NFC tag with the top of their phone, the My Dial app will open to the last page/contact they were viewing."
+                            content: "• Step 1: Create a shortcut in the 'Shortcuts' app\n• Tap '+ New Shortcut'\n• Choose 'Open App'\n• Select 'My Dial' app\n\n• Step 2: Create an NFC automation\n• In the 'Shortcuts' app, choose 'Automation'\n• Tap 'New Automation' → 'NFC'\n• Enable 'Run Immediately'\n• Tap 'Scan', then place the NFC tag near the top of your phone\n• When you get a success message, name the tag (e.g., 'Easy Dial')\n• Tap 'Next'\n• Select the 'Open App' shortcut created in Step 1\n\n• Once set up, whenever the user touches the NFC tag with the top of their phone, the My Dial app will open to the last page/contact they were viewing"
                         )
                     }
                     .padding()
