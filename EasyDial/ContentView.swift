@@ -2219,8 +2219,38 @@ struct HelpView: View {
                         )
                         
                         HelpSection(
-                            title: "Supported Apps",
-                            content: "• Phone (native iOS calls)\n• WhatsApp (voice, video, text)\n• FaceTime (video calls)\n• Messages (SMS)\n• Telegram, Signal, Viber (text messaging)"
+                            title: "Calling with Phone / Message (Built-in iPhone Apps)",
+                            content: "Message, voice, and video calls are supported. Video calls are made via FaceTime if available on the contact's device."
+                        )
+                        
+                        HelpSection(
+                            title: "Calling with FaceTime / Message",
+                            content: "Message, voice, and video calls are supported. Messages use the native 'Messages' app. FaceTime voice and video calls are only available if the contact's number is FaceTime-enabled."
+                        )
+                        
+                        HelpSection(
+                            title: "Calling with WhatsApp",
+                            content: "When making a WhatsApp video call, a WhatsApp voice call will be initiated. Once connected, you can tap the camera icon within WhatsApp to switch to video mode."
+                        )
+                        
+                        HelpSection(
+                            title: "Other Supported Apps",
+                            content: "Telegram, Signal, and Viber: All call methods to these apps open the app in message mode."
+                        )
+                        
+                        HelpSection(
+                            title: "Always in Focus",
+                            content: "When using this app for elders or differently-abled people, there are two ways to ensure the app is always available and in focus:"
+                        )
+                        
+                        HelpSection(
+                            title: "Option 1: Enable Notification Reminders",
+                            content: "Enable the 'Always Bring to Focus' setting in the info menu (tap the 'i' icon). When the app is out of focus or closed, you will receive a notification reminder saying 'Return to My Dial'. Tap the notification to return to the app."
+                        )
+                        
+                        HelpSection(
+                            title: "Option 2: Use NFC Tag (requires NFC tag purchase)",
+                            content: "Step 1: Create a shortcut in the 'Shortcuts' app:\n• Tap '+ New Shortcut'\n• Choose 'Open App'\n• Select 'My Dial' app\n\nStep 2: Create an NFC automation:\n• In the 'Shortcuts' app, choose 'Automation'\n• Tap 'New Automation' → 'NFC'\n• Enable 'Run Immediately'\n• Tap 'Scan', then place the NFC tag near the top of your phone\n• When you get a success message, name the tag (e.g., 'Easy Dial')\n• Tap 'Next'\n• Select the 'Open App' shortcut created in Step 1\n\nOnce set up, whenever the user touches the NFC tag with the top of their phone, the My Dial app will open to the last page/contact they were viewing."
                         )
                     }
                     .padding()
