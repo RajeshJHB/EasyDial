@@ -17,22 +17,45 @@ import CallKit
 
 class CallDetector: NSObject, ObservableObject {
     static let shared = CallDetector()
-    private let callObserver = CXCallObserver()
+    private var callObserver: CXCallObserver?
+    private let canUseCallKit: Bool
     
     @Published var isOnCall: Bool = false
     
     private override init() {
+        // Check if user is in China - CallKit is restricted there
+        let locale = Locale.current
+        let regionCode = locale.region?.identifier ?? ""
+        
+        if regionCode == "CN" || regionCode == "CHN" {
+            print("⚠️ Current locale is China (\(regionCode)) - CallKit cannot be used")
+            canUseCallKit = false
+        } else {
+            canUseCallKit = true
+            print("✅ CallKit enabled for region: \(regionCode)")
+        }
+        
         super.init()
-        callObserver.setDelegate(self, queue: DispatchQueue.main)
+        
+        // Setup CallKit observer if allowed
+        if canUseCallKit {
+            callObserver = CXCallObserver()
+            callObserver?.setDelegate(self, queue: DispatchQueue.main)
+        }
     }
     
     var hasActiveCall: Bool {
+        guard canUseCallKit, let callObserver = callObserver else {
+            return false
+        }
         return callObserver.calls.contains { !$0.hasEnded }
     }
 }
 
 extension CallDetector: CXCallObserverDelegate {
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        guard canUseCallKit else { return }
+        
         let wasOnCall = isOnCall
         isOnCall = callObserver.calls.contains { !$0.hasEnded }
         

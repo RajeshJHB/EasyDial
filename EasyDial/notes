@@ -1,0 +1,14 @@
+(void)viewDidLoad {
+    [super viewDidLoad];
+
+    NSLocale *userLocale = [NSLocale currentLocale];
+    if ([userLocale.countryCode containsString: @"CN"] || [userLocale.countryCode containsString: @"CHN"]) {
+        NSLog(@"currentLocale is China so we cannot use CallKit.");
+        self.cannotUseCallKit = YES;
+    } else {
+        self.cannotUseCallKit = NO;
+        // setup CallKit observer
+        self.callObserver = [[CXCallObserver alloc] init];
+        [self.callObserver setDelegate:self queue:nil];
+    }
+}
