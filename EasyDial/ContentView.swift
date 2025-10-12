@@ -2537,7 +2537,7 @@ struct HelpView: View {
                         
                         HelpSection(
                             title: "Customizing Contacts",
-                            content: "• Tap the gear icon in edit mode to configure each contact\n• Choose your preferred communication method (Voice/Video/Text)\n• Select which app to use (Phone, WhatsApp, FaceTime, etc.)\n• Add custom photos for contacts"
+                            content: "• Tap the gear icon in edit mode to configure each contact\n• Choose your preferred communication method (Voice/Video/Text)\n• Select which app to use (Phone, WhatsApp, FaceTime, etc.)\n• Add custom photos for contacts\n• The same contact can be added multiple times to My Dial\n• To add the same contact with the same number multiple times, add it once, save, then add it again\n• Multiple phone numbers and email addresses for the same contact can be added at once\n• Each entry on My Dial can have a different picture, even for the same contact\n• Different pictures can represent different ways you plan to communicate with the same person"
                         )
                         
                         HelpSection(
