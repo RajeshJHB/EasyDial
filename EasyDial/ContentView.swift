@@ -155,10 +155,10 @@ enum CommunicationMethod: String, CaseIterable, Codable {
 }
 
 enum CommunicationApp: String, CaseIterable, Codable {
-    case phoneMessage = "Phone / Message"
+    case phoneMessage = "Phone iOS"
     case whatsapp = "WhatsApp"
     case telegram = "Telegram"
-    case facetime = "FaceTime / Message"
+    case facetime = "FaceTime"
     case signal = "Signal"
     case viber = "Viber"
     
@@ -1698,7 +1698,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         if let app = communicationApp {
             self.communicationApp = app
         } else {
-            // Default to Phone / Message for all communication methods
+            // Default to Phone iOS for all communication methods
             self.communicationApp = .phoneMessage
         }
     }
@@ -1776,9 +1776,9 @@ class AppDetectionUtility {
         print("🚀 Starting app detection...")
         var installedApps: [CommunicationApp] = []
         
-        // Always include Phone / Message as it's built into iOS
+        // Always include Phone iOS as it's built into iOS
         installedApps.append(.phoneMessage)
-        print("✅ Added built-in app: Phone / Message")
+        print("✅ Added built-in app: Phone iOS")
         
         // Check for other installed apps
         let otherApps: [CommunicationApp] = [.whatsapp, .telegram, .facetime, .signal, .viber]
@@ -2546,12 +2546,12 @@ struct HelpView: View {
                         )
                         
                         HelpSection(
-                            title: "Calling with Phone / Message (Built-in iPhone Apps)",
+                            title: "Calling with Phone iOS (Built-in iPhone Apps)",
                             content: "• Message, voice, and video calls are supported\n• Video calls are made via FaceTime if available on the contact's device"
                         )
                         
                         HelpSection(
-                            title: "Calling with FaceTime / Message",
+                            title: "Calling with FaceTime",
                             content: "• Message, voice, and video calls are supported\n• Messages use the native 'Messages' app\n• FaceTime voice and video calls can be made using either a phone number or email address\n• When adding a contact, you can select an email address for FaceTime calls if the contact has FaceTime enabled on their email"
                         )
                         
