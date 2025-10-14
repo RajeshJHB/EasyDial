@@ -2178,10 +2178,41 @@ struct CanvasView: View {
     @State private var itemHistory: [CanvasItemType] = []
     @State private var selectedTextId: UUID?
     @State private var scrollOffset: CGFloat = 0
+    @State private var selectedColor: Color = .black
+    @State private var showColorPicker = false
+    @State private var selectedFontName: String = "System"
     
     private var canvasDataKey: String {
         return "CanvasData_\(favorite.contactIdentifier)"
     }
+    
+    // Preset colors for quick selection
+    private let presetColors: [Color] = [
+        .black, .red, .blue, .green, .orange, .purple, .pink, .brown,
+        .gray, .yellow, .cyan, .mint, .indigo, .teal
+    ]
+    
+    // Font size options
+    private let fontSizes: [CGFloat] = [12, 16, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72]
+    
+    // Font name options - 15 most popular
+    private let fontNames: [String] = [
+        "System",
+        "System Bold",
+        "Helvetica Neue",
+        "Arial",
+        "Avenir",
+        "Georgia",
+        "Times New Roman",
+        "Courier New",
+        "Verdana",
+        "Futura",
+        "Palatino",
+        "Gill Sans",
+        "Marker Felt",
+        "Noteworthy",
+        "Zapfino"
+    ]
     
     var body: some View {
         NavigationView {
@@ -2206,7 +2237,7 @@ struct CanvasView: View {
                                     path.addLines(drawing.points)
                                     context.stroke(
                                         path,
-                                        with: .color(.black),
+                                        with: .color(drawing.color),
                                         lineWidth: 3
                                     )
                                 }
@@ -2215,7 +2246,7 @@ struct CanvasView: View {
                                 path.addLines(currentDrawing.points)
                                 context.stroke(
                                     path,
-                                    with: .color(.black),
+                                    with: .color(currentDrawing.color),
                                     lineWidth: 3
                                 )
                             }
@@ -2234,6 +2265,10 @@ struct CanvasView: View {
                                             selectedTextId = nil
                                         }
                                         if !isDraggingText {
+                                            if currentDrawing.points.isEmpty {
+                                                // Start new drawing with current color
+                                                currentDrawing.color = selectedColor
+                                            }
                                             currentDrawing.points.append(value.location)
                                         }
                                     }
@@ -2252,8 +2287,8 @@ struct CanvasView: View {
                                 let isSelected = selectedTextId == textItem.id
                                 
                                 Text(textItem.text)
-                                    .font(.system(size: textItem.fontSize))
-                                    .foregroundColor(.black)
+                                    .font(getFontForTextItem(textItem))
+                                    .foregroundColor(textItem.color)
                                     .padding(4)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
@@ -2285,6 +2320,11 @@ struct CanvasView: View {
                                     )
                             }
                         }
+                    }
+                    
+                    // Color palette (expandable)
+                    if showColorPicker {
+                        colorPaletteView
                     }
                     
                     // Text input controls
@@ -2333,41 +2373,54 @@ struct CanvasView: View {
                             .disabled(currentText.isEmpty)
                         }
                         
-                        // Font size slider
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
+                        // Font controls
+                        HStack(spacing: 12) {
+                            // Font size picker
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(selectedTextId != nil ? "Edit Font Size:" : "Font Size:")
-                                    .font(.subheadline)
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
-                                Spacer()
-                                Text("\(Int(fontSize))")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(selectedTextId != nil ? .orange : .blue)
-                                if selectedTextId != nil {
-                                    Image(systemName: "pencil.circle.fill")
-                                        .foregroundColor(.orange)
-                                        .font(.caption)
+                                
+                                Picker("Font Size", selection: $fontSize) {
+                                    ForEach(fontSizes, id: \.self) { size in
+                                        Text("\(Int(size))").tag(size)
+                                    }
                                 }
-                            }
-                            
-                            Slider(value: $fontSize, in: 12...72, step: 1)
-                                .accentColor(selectedTextId != nil ? .orange.opacity(0.7) : .blue.opacity(0.7))
+                                .pickerStyle(MenuPickerStyle())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
                                 .onChange(of: fontSize) { oldValue, newValue in
                                     if let selectedId = selectedTextId,
                                        let index = textItems.firstIndex(where: { $0.id == selectedId }) {
                                         textItems[index].fontSize = newValue
                                     }
                                 }
+                            }
                             
-                            HStack {
-                                Text("12")
-                                    .font(.caption2)
+                            // Font name picker
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Font Type:")
+                                    .font(.caption)
                                     .foregroundColor(.secondary)
-                                Spacer()
-                                Text("72")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                
+                                Picker("Font Type", selection: $selectedFontName) {
+                                    ForEach(fontNames, id: \.self) { fontName in
+                                        Text(fontName).tag(fontName)
+                                    }
+                                }
+                                .pickerStyle(MenuPickerStyle())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                                .onChange(of: selectedFontName) { oldValue, newValue in
+                                    if let selectedId = selectedTextId,
+                                       let index = textItems.firstIndex(where: { $0.id == selectedId }) {
+                                        textItems[index].fontName = newValue
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 4)
@@ -2426,12 +2479,36 @@ struct CanvasView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Draw or Type")
+            .navigationTitle("Canvas")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
+                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 16) {
+                        Text("Canvas")
+                            .font(.headline)
+                        
+                        Button(action: {
+                            showColorPicker.toggle()
+                        }) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(selectedColor)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                Image(systemName: showColorPicker ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.blue.opacity(0.7))
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -2445,6 +2522,35 @@ struct CanvasView: View {
         .onAppear {
             loadCanvasData()
         }
+    }
+    
+    @ViewBuilder
+    private var colorPaletteView: some View {
+        VStack(spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 40))], spacing: 12) {
+                ForEach(presetColors, id: \.self) { color in
+                    Circle()
+                        .fill(color)
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Circle()
+                                .stroke(selectedColor == color ? Color.blue : Color.gray.opacity(0.3), lineWidth: selectedColor == color ? 3 : 1)
+                        )
+                        .onTapGesture {
+                            selectedColor = color
+                            // If text is selected, update its color
+                            if let selectedId = selectedTextId,
+                               let index = textItems.firstIndex(where: { $0.id == selectedId }) {
+                                textItems[index].color = color
+                            }
+                        }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
+        .transition(.opacity)
     }
     
     @ViewBuilder
@@ -2494,7 +2600,9 @@ struct CanvasView: View {
         let newTextItem = TextItem(
             text: currentText,
             position: centerPosition,
-            fontSize: fontSize
+            fontSize: fontSize,
+            color: selectedColor,
+            fontName: selectedFontName
         )
         
         textItems.append(newTextItem)
@@ -2503,6 +2611,7 @@ struct CanvasView: View {
         isTextFieldFocused = false
         selectedTextId = nil
         fontSize = 24
+        selectedFontName = "System"
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             scrollOffset = 0
         }
@@ -2598,6 +2707,44 @@ struct CanvasView: View {
         }
     }
     
+    private func getFontForTextItem(_ textItem: TextItem) -> Font {
+        let size = textItem.fontSize
+        switch textItem.fontName {
+        case "System":
+            return .system(size: size)
+        case "System Bold":
+            return .system(size: size, weight: .bold)
+        case "Helvetica Neue":
+            return .custom("HelveticaNeue", size: size)
+        case "Arial":
+            return .custom("Arial", size: size)
+        case "Avenir":
+            return .custom("Avenir", size: size)
+        case "Georgia":
+            return .custom("Georgia", size: size)
+        case "Times New Roman":
+            return .custom("Times New Roman", size: size)
+        case "Courier New":
+            return .custom("Courier New", size: size)
+        case "Verdana":
+            return .custom("Verdana", size: size)
+        case "Futura":
+            return .custom("Futura", size: size)
+        case "Palatino":
+            return .custom("Palatino", size: size)
+        case "Gill Sans":
+            return .custom("Gill Sans", size: size)
+        case "Marker Felt":
+            return .custom("Marker Felt", size: size)
+        case "Noteworthy":
+            return .custom("Noteworthy-Light", size: size)
+        case "Zapfino":
+            return .custom("Zapfino", size: size)
+        default:
+            return .system(size: size)
+        }
+    }
+    
     private var drawingContent: some View {
         ZStack {
             Canvas { context, size in
@@ -2606,7 +2753,7 @@ struct CanvasView: View {
                     path.addLines(drawing.points)
                     context.stroke(
                         path,
-                        with: .color(.black),
+                        with: .color(drawing.color),
                         lineWidth: 3
                     )
                 }
@@ -2614,8 +2761,8 @@ struct CanvasView: View {
             
             ForEach(textItems) { textItem in
                 Text(textItem.text)
-                    .font(.system(size: textItem.fontSize))
-                    .foregroundColor(.black)
+                    .font(getFontForTextItem(textItem))
+                    .foregroundColor(textItem.color)
                     .position(textItem.position)
             }
         }
@@ -2632,13 +2779,87 @@ enum CanvasItemType {
 
 struct Drawing: Codable {
     var points: [CGPoint] = []
+    var color: Color = .black
+    
+    enum CodingKeys: String, CodingKey {
+        case points
+        case colorData
+    }
+    
+    init(points: [CGPoint] = [], color: Color = .black) {
+        self.points = points
+        self.color = color
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        points = try container.decode([CGPoint].self, forKey: .points)
+        if let colorData = try? container.decode(Data.self, forKey: .colorData),
+           let uiColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: colorData) {
+            color = Color(uiColor)
+        } else {
+            color = .black
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(points, forKey: .points)
+        let uiColor = UIColor(color)
+        if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: uiColor, requiringSecureCoding: false) {
+            try container.encode(colorData, forKey: .colorData)
+        }
+    }
 }
 
 struct TextItem: Identifiable, Codable {
-    let id = UUID()
+    let id: UUID
     var text: String
     var position: CGPoint
     var fontSize: CGFloat
+    var color: Color
+    var fontName: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id, text, position, fontSize, colorData, fontName
+    }
+    
+    init(text: String, position: CGPoint, fontSize: CGFloat, color: Color = .black, fontName: String = "System") {
+        self.id = UUID()
+        self.text = text
+        self.position = position
+        self.fontSize = fontSize
+        self.color = color
+        self.fontName = fontName
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        position = try container.decode(CGPoint.self, forKey: .position)
+        fontSize = try container.decode(CGFloat.self, forKey: .fontSize)
+        fontName = (try? container.decode(String.self, forKey: .fontName)) ?? "System"
+        if let colorData = try? container.decode(Data.self, forKey: .colorData),
+           let uiColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: UIColor.self, from: colorData) {
+            color = Color(uiColor)
+        } else {
+            color = .black
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(text, forKey: .text)
+        try container.encode(position, forKey: .position)
+        try container.encode(fontSize, forKey: .fontSize)
+        try container.encode(fontName, forKey: .fontName)
+        let uiColor = UIColor(color)
+        if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: uiColor, requiringSecureCoding: false) {
+            try container.encode(colorData, forKey: .colorData)
+        }
+    }
 }
 
 struct CanvasData: Codable {
