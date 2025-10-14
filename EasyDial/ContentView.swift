@@ -2487,33 +2487,35 @@ struct CanvasView: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 16) {
-                        Text("Canvas")
-                            .font(.headline)
-                        
-                        Button(action: {
-                            showColorPicker.toggle()
-                        }) {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(selectedColor)
-                                    .frame(width: 20, height: 20)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
-                                Image(systemName: showColorPicker ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.blue.opacity(0.7))
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveCanvas()
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Button(action: {
+                                showColorPicker.toggle()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(selectedColor)
+                                        .frame(width: 20, height: 20)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                    Image(systemName: showColorPicker ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.blue.opacity(0.7))
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Text("Color")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Button("Save") {
+                            saveCanvas()
+                        }
                     }
                 }
             }
@@ -3267,8 +3269,36 @@ struct HelpView: View {
                         
                         HelpSection(
                             title: "Custom Contact Photos (Gallery, Camera, Canvas)",
-                            content: "• Gallery: Choose an existing photo from your photo library\n• Camera: Take a new photo with your device camera\n• Canvas: Draw or add text to create a custom contact image\n\nCanvas Features:\n• Draw freehand with your finger using black strokes\n• Add text items anywhere on the canvas\n• Adjust font size from 12 to 72 points\n• Tap text to select it (blue border indicates selection)\n• Drag text items to reposition them\n• Edit selected text font size in real-time\n• Use Undo to remove the last drawing stroke or text item\n• Use Clear to remove all canvas content\n• Scroll arrows appear when typing to adjust view"
+                            content: "• Gallery: Choose an existing photo from your photo library\n• Camera: Take a new photo with your device camera\n• Canvas: Draw or add text to create a custom contact image\n\nCanvas Features:\n• Draw freehand with your finger\n• Choose from 14 colors for drawing and text\n• Add text items anywhere on the canvas\n• Select font size: 12, 16, 20, 24, 28, 32, 36, 40, 48, 56, 64, or 72 points\n• Choose from 15 different fonts\n• Tap text to select it (blue border indicates selection)\n• Drag text items to reposition them\n• Edit selected text font size and color\n• Use Undo to remove the last drawing stroke or text item\n• Use Clear to remove all canvas content\n• Scroll arrows appear when typing to adjust view"
                         )
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Available Fonts:")
+                                .font(.headline)
+                                .padding(.top, 8)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("System").font(.system(size: 14))
+                                Text("System Bold").font(.system(size: 14, weight: .bold))
+                                Text("Helvetica Neue").font(.custom("HelveticaNeue", size: 14))
+                                Text("Arial").font(.custom("Arial", size: 14))
+                                Text("Avenir").font(.custom("Avenir", size: 14))
+                                Text("Georgia").font(.custom("Georgia", size: 14))
+                                Text("Times New Roman").font(.custom("Times New Roman", size: 14))
+                                Text("Courier New").font(.custom("Courier New", size: 14))
+                                Text("Verdana").font(.custom("Verdana", size: 14))
+                                Text("Futura").font(.custom("Futura", size: 14))
+                                Text("Palatino").font(.custom("Palatino", size: 14))
+                                Text("Gill Sans").font(.custom("Gill Sans", size: 14))
+                                Text("Marker Felt").font(.custom("Marker Felt", size: 14))
+                                Text("Noteworthy").font(.custom("Noteworthy-Light", size: 14))
+                                Text("Zapfino").font(.custom("Zapfino", size: 14))
+                            }
+                            .padding(.leading, 16)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
                         
                         HelpSection(
                             title: "Navigation Tips",
