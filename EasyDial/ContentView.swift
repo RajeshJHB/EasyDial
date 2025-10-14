@@ -1975,6 +1975,7 @@ struct PhotoPickerSection: View {
     @Binding var favorite: FavoriteContact
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var showingCamera = false
+    @State private var showingCanvas = false
     
     init(favorite: Binding<FavoriteContact>) {
         self._favorite = favorite
@@ -1986,37 +1987,54 @@ struct PhotoPickerSection: View {
                 ContactPhotoView(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, size: 60)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        // Gallery picker button
-                        PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                            HStack {
-                                Image(systemName: "photo")
-                                    .foregroundColor(.blue)
-                                Text("Gallery")
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
+                    // Gallery picker button
+                    PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                        HStack {
+                            Image(systemName: "photo")
+                                .foregroundColor(.blue)
+                            Text("Gallery")
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        // Camera button
-                        Button {
-                            showingCamera = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "camera")
-                                    .foregroundColor(.green.opacity(0.7))
-                                Text("Camera")
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(Color.green.opacity(0.05))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Camera button
+                    Button {
+                        showingCamera = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "camera")
+                                .foregroundColor(.green.opacity(0.7))
+                            Text("Camera")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.green.opacity(0.05))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Canvas button
+                    Button {
+                        showingCanvas = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "paintbrush")
+                                .foregroundColor(.purple.opacity(0.7))
+                            Text("Canvas")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.purple.opacity(0.05))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                     
                     if favorite.customImageFileName != nil {
                         Button(role: .destructive) {
@@ -2043,6 +2061,9 @@ struct PhotoPickerSection: View {
         }
         .sheet(isPresented: $showingCamera) {
             CameraPicker(favorite: $favorite)
+        }
+        .sheet(isPresented: $showingCanvas) {
+            CanvasView(favorite: $favorite)
         }
         .onChange(of: selectedItem) { _, newItem in
             guard let item = newItem else { return }
@@ -2140,6 +2161,489 @@ struct CameraPicker: UIViewControllerRepresentable {
             }
         }
     }
+}
+
+// MARK: - Canvas View (Drawing & Text)
+struct CanvasView: View {
+    @Binding var favorite: FavoriteContact
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentDrawing = Drawing()
+    @State private var drawings: [Drawing] = []
+    @State private var textItems: [TextItem] = []
+    @State private var currentText = ""
+    @State private var fontSize: CGFloat = 24
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var draggedTextId: UUID?
+    @State private var isDraggingText = false
+    @State private var itemHistory: [CanvasItemType] = []
+    @State private var selectedTextId: UUID?
+    @State private var scrollOffset: CGFloat = 0
+    
+    private var canvasDataKey: String {
+        return "CanvasData_\(favorite.contactIdentifier)"
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 12) {
+                    ZStack {
+                        // Canvas background
+                        Rectangle()
+                            .fill(Color.white)
+                            .frame(height: UIScreen.main.bounds.height * 0.6)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                        
+                        // Drawing canvas
+                        ZStack {
+                            Canvas { context, size in
+                                for drawing in drawings {
+                                    var path = Path()
+                                    path.addLines(drawing.points)
+                                    context.stroke(
+                                        path,
+                                        with: .color(.black),
+                                        lineWidth: 3
+                                    )
+                                }
+                                
+                                var path = Path()
+                                path.addLines(currentDrawing.points)
+                                context.stroke(
+                                    path,
+                                    with: .color(.black),
+                                    lineWidth: 3
+                                )
+                            }
+                            .frame(height: UIScreen.main.bounds.height * 0.6)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if selectedTextId != nil {
+                                    selectedTextId = nil
+                                    fontSize = 24
+                                }
+                            }
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        if !isDraggingText && selectedTextId != nil {
+                                            selectedTextId = nil
+                                        }
+                                        if !isDraggingText {
+                                            currentDrawing.points.append(value.location)
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        if !isDraggingText && !currentDrawing.points.isEmpty {
+                                            drawings.append(currentDrawing)
+                                            itemHistory.append(.drawing(index: drawings.count - 1))
+                                            currentDrawing = Drawing()
+                                        }
+                                    }
+                            )
+                            
+                            // Display text items
+                            ForEach(textItems.indices, id: \.self) { index in
+                                let textItem = textItems[index]
+                                let isSelected = selectedTextId == textItem.id
+                                
+                                Text(textItem.text)
+                                    .font(.system(size: textItem.fontSize))
+                                    .foregroundColor(.black)
+                                    .padding(4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(isSelected ? Color.blue.opacity(0.3) : Color.blue.opacity(0.1))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                                            )
+                                    )
+                                    .position(textItem.position)
+                                    .simultaneousGesture(
+                                        TapGesture()
+                                            .onEnded { _ in
+                                                selectedTextId = textItem.id
+                                                fontSize = textItem.fontSize
+                                            }
+                                    )
+                                    .gesture(
+                                        DragGesture(minimumDistance: 5)
+                                            .onChanged { value in
+                                                isDraggingText = true
+                                                draggedTextId = textItem.id
+                                                textItems[index].position = value.location
+                                            }
+                                            .onEnded { _ in
+                                                isDraggingText = false
+                                                draggedTextId = nil
+                                            }
+                                    )
+                            }
+                        }
+                    }
+                    
+                    // Text input controls
+                    VStack(spacing: 12) {
+                        TextField("Type text here", text: $currentText)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .focused($isTextFieldFocused)
+                        
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                currentText = ""
+                                isTextFieldFocused = false
+                                selectedTextId = nil
+                                fontSize = 24
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    scrollOffset = 0
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "xmark.circle.fill")
+                                    Text("Cancel")
+                                        .font(.system(size: 14))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(currentText.isEmpty ? Color.gray.opacity(0.3) : Color.red.opacity(0.6))
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .disabled(currentText.isEmpty)
+                            
+                            Button(action: {
+                                addTextToCanvas()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Text")
+                                        .font(.system(size: 14))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(currentText.isEmpty ? Color.gray.opacity(0.3) : Color.green.opacity(0.6))
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .disabled(currentText.isEmpty)
+                        }
+                        
+                        // Font size slider
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(selectedTextId != nil ? "Edit Font Size:" : "Font Size:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("\(Int(fontSize))")
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(selectedTextId != nil ? .orange : .blue)
+                                if selectedTextId != nil {
+                                    Image(systemName: "pencil.circle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                }
+                            }
+                            
+                            Slider(value: $fontSize, in: 12...72, step: 1)
+                                .accentColor(selectedTextId != nil ? .orange.opacity(0.7) : .blue.opacity(0.7))
+                                .onChange(of: fontSize) { oldValue, newValue in
+                                    if let selectedId = selectedTextId,
+                                       let index = textItems.firstIndex(where: { $0.id == selectedId }) {
+                                        textItems[index].fontSize = newValue
+                                    }
+                                }
+                            
+                            HStack {
+                                Text("12")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("72")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
+                    .offset(y: scrollOffset)
+                    
+                    // Action buttons
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            undoLastItem()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.uturn.backward")
+                                Text("Undo")
+                                    .font(.system(size: 14))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 8)
+                            .background(itemHistory.isEmpty ? Color.gray.opacity(0.3) : Color.orange.opacity(0.6))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .disabled(itemHistory.isEmpty)
+                        
+                        Button(action: {
+                            drawings = []
+                            currentDrawing = Drawing()
+                            textItems = []
+                            currentText = ""
+                            itemHistory = []
+                            selectedTextId = nil
+                            fontSize = 24
+                            // Also clear saved canvas data
+                            UserDefaults.standard.removeObject(forKey: canvasDataKey)
+                            print("🗑️ Canvas cleared and saved data deleted")
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                Text("Clear")
+                                    .font(.system(size: 14))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 8)
+                            .background(Color.red.opacity(0.6))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .offset(y: scrollOffset)
+                }
+                .padding()
+            }
+            .navigationTitle("Draw or Type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveCanvas()
+                    }
+                }
+            }
+            .overlay(floatingScrollButtons)
+        }
+        .onAppear {
+            loadCanvasData()
+        }
+    }
+    
+    @ViewBuilder
+    private var floatingScrollButtons: some View {
+        if !currentText.isEmpty {
+            HStack {
+                Spacer()
+                
+                VStack(spacing: 16) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            scrollOffset = max(scrollOffset - 100, -200)
+                        }
+                    }) {
+                        Image(systemName: "chevron.up.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray.opacity(0.3))
+                            .background(Circle().fill(Color.white.opacity(0.5)))
+                            .shadow(radius: 2)
+                    }
+                    
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            scrollOffset = min(scrollOffset + 100, 200)
+                        }
+                    }) {
+                        Image(systemName: "chevron.down.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray.opacity(0.3))
+                            .background(Circle().fill(Color.white.opacity(0.5)))
+                            .shadow(radius: 2)
+                    }
+                }
+                .padding(.trailing, 16)
+            }
+        }
+    }
+    
+    private func addTextToCanvas() {
+        guard !currentText.isEmpty else { return }
+        
+        let centerPosition = CGPoint(
+            x: UIScreen.main.bounds.width / 2,
+            y: (UIScreen.main.bounds.height * 0.6) / 2
+        )
+        
+        let newTextItem = TextItem(
+            text: currentText,
+            position: centerPosition,
+            fontSize: fontSize
+        )
+        
+        textItems.append(newTextItem)
+        itemHistory.append(.text(id: newTextItem.id))
+        currentText = ""
+        isTextFieldFocused = false
+        selectedTextId = nil
+        fontSize = 24
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            scrollOffset = 0
+        }
+    }
+    
+    private func undoLastItem() {
+        guard let lastItem = itemHistory.popLast() else { return }
+        
+        switch lastItem {
+        case .drawing(let index):
+            if index < drawings.count {
+                drawings.remove(at: index)
+                itemHistory = itemHistory.map { item in
+                    if case .drawing(let idx) = item, idx > index {
+                        return .drawing(index: idx - 1)
+                    }
+                    return item
+                }
+            }
+        case .text(let id):
+            if let textIndex = textItems.firstIndex(where: { $0.id == id }) {
+                textItems.remove(at: textIndex)
+            }
+        }
+    }
+    
+    private func saveCanvas() {
+        let renderer = ImageRenderer(content: drawingContent)
+        renderer.scale = UIScreen.main.scale
+        
+        if let uiImage = renderer.uiImage {
+            // Resize to 512x512
+            let resized = resizeImage(uiImage, maxDimension: 512)
+            if let jpeg = resized.jpegData(compressionQuality: 0.85) {
+                // Delete old image if exists
+                if let oldFileName = favorite.customImageFileName {
+                    ImageStorageManager.shared.deleteImage(named: oldFileName)
+                }
+                // Save new image and get file name
+                favorite.customImageFileName = ImageStorageManager.shared.saveImage(jpeg, for: favorite.contactIdentifier)
+                
+                // Save canvas data for future editing
+                saveCanvasData()
+                print("✅ Canvas saved as image and data saved for contact: \(favorite.contactIdentifier)")
+            }
+        }
+        
+        dismiss()
+    }
+    
+    private func saveCanvasData() {
+        let canvasData = CanvasData(drawings: drawings, textItems: textItems)
+        if let encoded = try? JSONEncoder().encode(canvasData) {
+            UserDefaults.standard.set(encoded, forKey: canvasDataKey)
+            print("💾 Canvas data saved (drawings: \(drawings.count), text items: \(textItems.count))")
+        }
+    }
+    
+    private func loadCanvasData() {
+        if let data = UserDefaults.standard.data(forKey: canvasDataKey),
+           let canvasData = try? JSONDecoder().decode(CanvasData.self, from: data) {
+            drawings = canvasData.drawings
+            textItems = canvasData.textItems
+            // Rebuild item history based on loaded data
+            itemHistory = []
+            for index in 0..<drawings.count {
+                itemHistory.append(.drawing(index: index))
+            }
+            for textItem in textItems {
+                itemHistory.append(.text(id: textItem.id))
+            }
+            print("📂 Canvas data loaded (drawings: \(drawings.count), text items: \(textItems.count))")
+        } else {
+            // If no saved data, start with empty canvas
+            drawings = []
+            textItems = []
+            itemHistory = []
+            print("ℹ️ No saved canvas data found - starting with empty canvas")
+        }
+    }
+    
+    private func resizeImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let width = image.size.width
+        let height = image.size.height
+        let scale = min(1, maxDimension / max(width, height))
+        let newSize = CGSize(width: width * scale, height: height * scale)
+        if scale >= 1 { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
+    
+    private var drawingContent: some View {
+        ZStack {
+            Canvas { context, size in
+                for drawing in drawings {
+                    var path = Path()
+                    path.addLines(drawing.points)
+                    context.stroke(
+                        path,
+                        with: .color(.black),
+                        lineWidth: 3
+                    )
+                }
+            }
+            
+            ForEach(textItems) { textItem in
+                Text(textItem.text)
+                    .font(.system(size: textItem.fontSize))
+                    .foregroundColor(.black)
+                    .position(textItem.position)
+            }
+        }
+        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height * 0.6)
+        .background(Color.white)
+    }
+}
+
+// MARK: - Canvas Supporting Data Models
+enum CanvasItemType {
+    case drawing(index: Int)
+    case text(id: UUID)
+}
+
+struct Drawing: Codable {
+    var points: [CGPoint] = []
+}
+
+struct TextItem: Identifiable, Codable {
+    let id = UUID()
+    var text: String
+    var position: CGPoint
+    var fontSize: CGFloat
+}
+
+struct CanvasData: Codable {
+    var drawings: [Drawing]
+    var textItems: [TextItem]
 }
 
 /// Detailed view for a single contact with swipe navigation
@@ -2538,6 +3042,11 @@ struct HelpView: View {
                         HelpSection(
                             title: "Customizing Contacts",
                             content: "• Tap the gear icon in edit mode to configure each contact\n• Choose your preferred communication method (Voice/Video/Text)\n• Select which app to use (Phone iOS, WhatsApp, FaceTime, etc.)\n• Add custom photos for contacts\n• The same contact can be added multiple times to My Dial\n• To add the same contact with the same number multiple times, add it once, save, then add it again\n• Multiple phone numbers and email addresses for the same contact can be added at once\n• Each entry on My Dial can have a different picture, even for the same contact\n• Different pictures can represent different ways you plan to communicate with the same person"
+                        )
+                        
+                        HelpSection(
+                            title: "Custom Contact Photos (Gallery, Camera, Canvas)",
+                            content: "• Gallery: Choose an existing photo from your photo library\n• Camera: Take a new photo with your device camera\n• Canvas: Draw or add text to create a custom contact image\n\nCanvas Features:\n• Draw freehand with your finger using black strokes\n• Add text items anywhere on the canvas\n• Adjust font size from 12 to 72 points\n• Tap text to select it (blue border indicates selection)\n• Drag text items to reposition them\n• Edit selected text font size in real-time\n• Use Undo to remove the last drawing stroke or text item\n• Use Clear to remove all canvas content\n• Scroll arrows appear when typing to adjust view"
                         )
                         
                         HelpSection(
