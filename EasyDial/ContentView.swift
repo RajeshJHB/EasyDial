@@ -871,80 +871,122 @@ struct AddToFavoritesView: View {
     
     var body: some View {
         NavigationStack {
-            VStack {
-                // Selection counter
-                if !selectedContacts.isEmpty {
-                    HStack {
-                        Image(systemName: "star.fill")
-                            .foregroundColor(.yellow)
-                        Text("\(selectedContacts.count) contact\(selectedContacts.count == 1 ? "" : "s") selected")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
+            GeometryReader { geometry in
+                ZStack {
+                    mainContentView
+                    
+                    // Floating Done button when searching
+                    if !searchText.isEmpty {
+                        floatingDoneButton(geometry: geometry)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    .padding(.horizontal)
                 }
-                
-                if searchText.isEmpty {
-                    Text("Select a contact to add to favorites")
-                        .font(.headline)
-                        .padding()
-                }
-                
-                List(filteredContacts) { contact in
-                    ContactRow(contact: contact, contactsManager: contactsManager, selectedContacts: $selectedContacts)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                }
-                .searchable(text: $searchText, prompt: "Search contacts")
             }
             .navigationTitle("Add to Favorites")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
-                        // Add all selected contacts to favorites
-                        for selectedId in selectedContacts {
-                            // Check if it's a single contact or individual phone/email selection
-                            if selectedId.contains("_phone_") {
-                                // Individual phone number selection
-                                let components = selectedId.split(separator: "_")
-                                if components.count >= 3,
-                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
-                                    let phoneId = components[2...].joined(separator: "_")
-                                    if let phoneNumber = contact.phoneNumbers.first(where: { $0.identifier == phoneId }) {
-                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber.value.stringValue, emailAddress: nil)
-                                    }
-                                }
-                            } else if selectedId.contains("_email_") {
-                                // Individual email selection
-                                let components = selectedId.split(separator: "_")
-                                if components.count >= 3,
-                                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
-                                    let emailId = components[2...].joined(separator: "_")
-                                    if let email = contact.emailAddresses.first(where: { $0.identifier == emailId }) {
-                                        // For email-only contacts, use email as the "phone number" placeholder
-                                        let emailString = email.value as String
-                                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
-                                    }
-                                }
-                            } else {
-                                // Single contact selection (no underscore)
-                                if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
-                                    if contact.phoneNumbers.count == 1,
-                                       let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
-                                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber, emailAddress: nil)
-                                    } else if contact.emailAddresses.count == 1 {
-                                        let emailString = contact.emailAddresses.first?.value as String? ?? ""
-                                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
-                                    }
-                                }
-                            }
-                        }
+                        addSelectedContactsToFavorites()
                         dismiss()
+                    }
+                }
+                
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContentView: some View {
+        VStack {
+            // Selection counter
+            if !selectedContacts.isEmpty {
+                HStack {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                    Text("\(selectedContacts.count) contact\(selectedContacts.count == 1 ? "" : "s") selected")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+                .padding(.horizontal)
+            }
+            
+            if searchText.isEmpty {
+                Text("Select a contact to add to favorites")
+                    .font(.headline)
+                    .padding()
+            }
+            
+            List(filteredContacts) { contact in
+                ContactRow(contact: contact, contactsManager: contactsManager, selectedContacts: $selectedContacts)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            }
+            .searchable(text: $searchText, prompt: "Search contacts")
+        }
+    }
+    
+    @ViewBuilder
+    private func floatingDoneButton(geometry: GeometryProxy) -> some View {
+        Button("Done") {
+            addSelectedContactsToFavorites()
+            dismiss()
+        }
+        .font(.headline)
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.blue)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white, lineWidth: 2)
+        )
+        .position(
+            x: min(geometry.size.width - 30, max(30, geometry.size.width * 0.70)), // Slightly more left
+            y: 60 // Fixed top position
+        )
+    }
+    
+    private func addSelectedContactsToFavorites() {
+        // Add all selected contacts to favorites (same as toolbar Done button)
+        for selectedId in selectedContacts {
+            // Check if it's a single contact or individual phone/email selection
+            if selectedId.contains("_phone_") {
+                // Individual phone number selection
+                let components = selectedId.split(separator: "_")
+                if components.count >= 3,
+                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
+                    let phoneId = components[2...].joined(separator: "_")
+                    if let phoneNumber = contact.phoneNumbers.first(where: { $0.identifier == phoneId }) {
+                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber.value.stringValue, emailAddress: nil)
+                    }
+                }
+            } else if selectedId.contains("_email_") {
+                // Individual email selection
+                let components = selectedId.split(separator: "_")
+                if components.count >= 3,
+                   let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
+                    let emailId = components[2...].joined(separator: "_")
+                    if let email = contact.emailAddresses.first(where: { $0.identifier == emailId }) {
+                        // For email-only contacts, use email as the "phone number" placeholder
+                        let emailString = email.value as String
+                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
+                    }
+                }
+            } else {
+                // Single contact selection (no underscore)
+                if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
+                    if contact.phoneNumbers.count == 1,
+                       let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
+                        contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber, emailAddress: nil)
+                    } else if contact.emailAddresses.count == 1 {
+                        let emailString = contact.emailAddresses.first?.value as String? ?? ""
+                        contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
                     }
                 }
             }
