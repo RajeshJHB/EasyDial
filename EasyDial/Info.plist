@@ -24,6 +24,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs access to camera to take photos for contact pictures.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs access to microphone to record voice names for contacts.</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.5.1</string>
 	<key>CFBundleVersion</key>

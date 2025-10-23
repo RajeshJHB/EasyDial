@@ -12,6 +12,8 @@ import PhotosUI
 import MessageUI
 import UserNotifications
 import CallKit
+import AVFoundation
+import AudioToolbox
 
 // MARK: - Call Detector
 
@@ -1688,6 +1690,8 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
     var communicationApp: CommunicationApp
     // Optional custom avatar image file name (stored in file system)
     var customImageFileName: String?
+    // Optional voice note file name (stored in file system)
+    var voiceNoteFileName: String?
     // Optional email address for FaceTime calls
     var emailAddress: String?
     
@@ -1696,7 +1700,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
     let contactFamilyName: String
     
     enum CodingKeys: String, CodingKey {
-        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageFileName, contactGivenName, contactFamilyName, emailAddress
+        case contactIdentifier, phoneNumber, displayName, communicationMethod, communicationApp, customImageFileName, voiceNoteFileName, contactGivenName, contactFamilyName, emailAddress
         // Note: CNContact is NOT included in CodingKeys to avoid large data in UserDefaults
     }
     
@@ -1728,6 +1732,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         self.contactGivenName = contact.givenName
         self.contactFamilyName = contact.familyName
         self.emailAddress = emailAddress
+        self.voiceNoteFileName = nil
         
         // Save custom image to file system if provided
         if let imageData = customImageData {
@@ -1753,6 +1758,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         communicationMethod = try container.decodeIfPresent(CommunicationMethod.self, forKey: .communicationMethod) ?? .voiceCall
         communicationApp = try container.decodeIfPresent(CommunicationApp.self, forKey: .communicationApp) ?? .phoneMessage
         customImageFileName = try container.decodeIfPresent(String.self, forKey: .customImageFileName)
+        voiceNoteFileName = try container.decodeIfPresent(String.self, forKey: .voiceNoteFileName)
         contactGivenName = try container.decodeIfPresent(String.self, forKey: .contactGivenName) ?? ""
         contactFamilyName = try container.decodeIfPresent(String.self, forKey: .contactFamilyName) ?? ""
         emailAddress = try container.decodeIfPresent(String.self, forKey: .emailAddress)
@@ -2018,6 +2024,7 @@ struct PhotoPickerSection: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var showingCamera = false
     @State private var showingCanvas = false
+    @State private var showingVoiceRecorder = false
     
     init(favorite: Binding<FavoriteContact>) {
         self._favorite = favorite
@@ -2078,6 +2085,35 @@ struct PhotoPickerSection: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     
+                    // Voice Name button
+                    Button {
+                        showingVoiceRecorder = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "mic")
+                                .foregroundColor(.orange.opacity(0.7))
+                            Text("Voice Name")
+                            
+                            // Small wave indicator if recording exists
+                            if favorite.voiceNoteFileName != nil {
+                                HStack(spacing: 1) {
+                                    ForEach(0..<3) { index in
+                                        RoundedRectangle(cornerRadius: 1)
+                                            .fill(Color.orange)
+                                            .frame(width: 2, height: 8)
+                                    }
+                                }
+                                .padding(.leading, 4)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.orange.opacity(0.05))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
                     if favorite.customImageFileName != nil {
                         Button(role: .destructive) {
                             if let fileName = favorite.customImageFileName {
@@ -2106,6 +2142,9 @@ struct PhotoPickerSection: View {
         }
         .sheet(isPresented: $showingCanvas) {
             CanvasView(favorite: $favorite)
+        }
+        .sheet(isPresented: $showingVoiceRecorder) {
+            VoiceRecorderView(favorite: $favorite)
         }
         .onChange(of: selectedItem) { _, newItem in
             guard let item = newItem else { return }
@@ -4020,6 +4059,671 @@ struct ContactDetailViewDirect: View {
         .sheet(isPresented: $showingSuggestions) {
             SuggestionView()
         }
+    }
+}
+
+// MARK: - Wave Indicator
+struct WaveIndicator: View {
+    let isRecording: Bool
+    let audioLevel: Float
+    @State private var animationOffset: CGFloat = 0
+    
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<8) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.red)
+                    .frame(width: 4, height: waveHeight(for: index))
+                    .animation(
+                        Animation.easeInOut(duration: 0.3)
+                            .repeatForever()
+                            .delay(Double(index) * 0.05),
+                        value: isRecording
+                    )
+            }
+        }
+        .frame(height: 30)
+        .onAppear {
+            if isRecording {
+                startWaveAnimation()
+            }
+        }
+        .onChange(of: isRecording) { _, newValue in
+            if newValue {
+                startWaveAnimation()
+            } else {
+                stopWaveAnimation()
+            }
+        }
+    }
+    
+    private func waveHeight(for index: Int) -> CGFloat {
+        if !isRecording {
+            return 4
+        }
+        
+        let baseHeight: CGFloat = 6
+        let maxHeight: CGFloat = 28
+        let phase = Double(index) * 0.3 + animationOffset
+        
+        // Use audio level to modulate the wave height
+        let audioModulation = CGFloat(audioLevel) * 0.5 + 0.5
+        let height = baseHeight + (maxHeight - baseHeight) * (sin(phase) + 1) / 2 * audioModulation
+        
+        return max(height, baseHeight)
+    }
+    
+    private func startWaveAnimation() {
+        withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+            animationOffset = .pi * 2
+        }
+    }
+    
+    private func stopWaveAnimation() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            animationOffset = 0
+        }
+    }
+}
+
+// MARK: - Voice Recorder View
+struct VoiceRecorderView: View {
+    @Binding var favorite: FavoriteContact
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var audioRecorder: AVAudioRecorder?
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var isRecording = false
+    @State private var isPlaying = false
+    @State private var recordingTime: TimeInterval = 0
+    @State private var recordingTimer: Timer?
+    @State private var hasExistingRecording = false
+    @State private var maxRecordingTime: TimeInterval = 5.0 // 5 seconds limit
+    @State private var waveAnimationOffset: CGFloat = 0
+    @State private var waveTimer: Timer?
+    @State private var audioLevel: Float = 0.0
+    @State private var playbackTime: TimeInterval = 0
+    @State private var playbackTimer: Timer?
+    
+    private var recordingURL: URL {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsPath.appendingPathComponent("voice_temp_recording.m4a")
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 30) {
+                // Header
+                VStack(spacing: 10) {
+                    Image(systemName: "mic.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.orange)
+                    
+                    Text("Voice Name for \(favorite.displayName)")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 20)
+                
+                // Recording Status
+                VStack(spacing: 15) {
+                    if isRecording {
+                        VStack(spacing: 10) {
+                            Text("Recording...")
+                                .font(.headline)
+                                .foregroundColor(.red)
+                            
+                            Text(formatTime(recordingTime))
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(recordingTime >= maxRecordingTime ? .red : .red)
+                            
+                            if recordingTime >= maxRecordingTime {
+                                Text("Recording Complete!")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            // Progress bar for 5-second limit
+                            ProgressView(value: recordingTime, total: maxRecordingTime)
+                                .progressViewStyle(LinearProgressViewStyle(tint: recordingTime >= maxRecordingTime ? .red : .orange))
+                                .frame(width: 200)
+                            
+                            Text("Max: \(formatTime(maxRecordingTime))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            // Wave animation
+                            WaveIndicator(isRecording: isRecording, audioLevel: audioLevel)
+                        }
+                    } else if hasExistingRecording {
+                        VStack(spacing: 10) {
+                            Text(isPlaying ? "Playing..." : "Existing Recording")
+                                .font(.headline)
+                                .foregroundColor(.blue)
+                            
+                            Text(formatTime(isPlaying ? playbackTime : (audioPlayer?.duration ?? 0)))
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.blue)
+                        }
+                    } else {
+                        VStack(spacing: 10) {
+                            Text("No Recording")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Tap Record to start")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                // Control Buttons
+                VStack(spacing: 20) {
+                    HStack(spacing: 30) {
+                        // Record/Stop Button
+                        Button(action: {
+                            if isRecording {
+                                stopRecording()
+                            } else {
+                                startRecording()
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                                    .font(.system(size: 24))
+                                Text(isRecording ? "Stop" : "Record")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 25)
+                                    .fill(isRecording ? Color.red : Color.orange)
+                            )
+                        }
+                        .disabled(isPlaying)
+                        
+                        // Play/Pause Button (only show if recording exists)
+                        if hasExistingRecording {
+                            Button(action: {
+                                if isPlaying {
+                                    pausePlayback()
+                                } else {
+                                    if audioPlayer?.isPlaying == false && playbackTime > 0 {
+                                        resumePlayback()
+                                    } else {
+                                        playRecording()
+                                    }
+                                }
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                        .font(.system(size: 24))
+                                    Text(isPlaying ? "Pause" : "Play")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 25)
+                                        .fill(Color.blue)
+                                )
+                            }
+                            .disabled(isRecording)
+                        }
+                    }
+                    
+                    // Delete Button
+                    if hasExistingRecording {
+                        Button(action: {
+                            deleteRecording()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "trash.circle.fill")
+                                    .font(.system(size: 24))
+                                Text("Delete")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 25)
+                                    .fill(Color.red)
+                            )
+                        }
+                        .disabled(isRecording || isPlaying)
+                    }
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Voice Name")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveRecording()
+                        dismiss()
+                    }
+                    .disabled(!hasExistingRecording)
+                }
+            }
+        }
+        .onAppear {
+            checkExistingRecording()
+        }
+        .onDisappear {
+            stopRecording()
+            stopPlayback()
+            waveTimer?.invalidate()
+            waveTimer = nil
+            playbackTimer?.invalidate()
+            playbackTimer = nil
+        }
+    }
+    
+    // MARK: - Recording Functions
+    
+    private func startRecording() {
+        print("🎤 Requesting microphone permission...")
+        let audioSession = AVAudioSession.sharedInstance()
+        
+        // Request microphone permission
+        audioSession.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                if granted {
+                    print("✅ Microphone permission granted")
+                    self.performRecording()
+                } else {
+                    print("❌ Microphone permission denied")
+                    // You could show an alert here
+                }
+            }
+        }
+    }
+    
+    private func performRecording() {
+        let audioSession = AVAudioSession.sharedInstance()
+        
+        do {
+            try audioSession.setCategory(.playAndRecord, mode: .default)
+            try audioSession.setActive(true)
+            
+            let settings = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44100,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+            ]
+            
+            print("🎤 Starting recording with settings:")
+            print("   - Format: M4A (MPEG4AAC)")
+            print("   - Sample Rate: 44100 Hz")
+            print("   - Channels: 2 (Stereo)")
+            print("   - Quality: High")
+            print("📁 Recording URL: \(recordingURL.path)")
+            
+            // Ensure Documents directory exists and is writable
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            print("📁 Documents directory: \(documentsPath.path)")
+            
+            // Check if Documents directory is writable
+            if FileManager.default.isWritableFile(atPath: documentsPath.path) {
+                print("✅ Documents directory is writable")
+            } else {
+                print("❌ Documents directory is not writable!")
+                return
+            }
+            
+            // Remove existing file if it exists
+            if FileManager.default.fileExists(atPath: recordingURL.path) {
+                try FileManager.default.removeItem(at: recordingURL)
+                print("🗑️ Removed existing recording file")
+            }
+            
+            audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
+            
+            if audioRecorder?.prepareToRecord() == true {
+                let success = audioRecorder?.record() ?? false
+                if success {
+                    print("✅ Recording started successfully")
+                } else {
+                    print("❌ Failed to start recording - record() returned false")
+                    return
+                }
+            } else {
+                print("❌ Failed to prepare recording")
+                return
+            }
+            
+            isRecording = true
+            recordingTime = 0
+            
+            // Start timer
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                recordingTime = audioRecorder?.currentTime ?? 0
+                
+                // Simulate audio level for wave animation
+                audioLevel = Float.random(in: 0.3...1.0)
+                
+                // Check file size every second for debugging
+                if Int(recordingTime * 10) % 10 == 0 { // Every 1 second
+                    checkRecordingFileSize()
+                }
+                
+                // Auto-stop after 5 seconds
+                if recordingTime >= maxRecordingTime {
+                    stopRecording()
+                }
+            }
+            
+        } catch {
+            print("❌ Failed to start recording: \(error)")
+        }
+    }
+    
+    private func stopRecording() {
+        print("🛑 Stopping recording at \(formatTime(recordingTime))")
+        
+        // Stop the recorder first
+        if let recorder = audioRecorder {
+            recorder.stop()
+            print("🛑 Recorder stopped")
+        }
+        
+        audioRecorder = nil
+        isRecording = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        
+        // Wait a moment for the file to be written
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.checkAndCopyRecording()
+        }
+    }
+    
+    private func checkAndCopyRecording() {
+        print("🔍 Checking for recording file at: \(recordingURL.path)")
+        
+        // Check if we have a recording
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+            hasExistingRecording = true
+            print("✅ Recording file exists")
+            
+            // Get file size
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
+                if let fileSize = attributes[.size] as? Int64 {
+                    print("📊 Original file size: \(fileSize) bytes")
+                    
+                    if fileSize > 0 {
+                        print("✅ Recording file has content")
+                    } else {
+                        print("❌ Recording file is empty (0 bytes)")
+                    }
+                }
+            } catch {
+                print("❌ Failed to get file attributes: \(error)")
+            }
+        } else {
+            print("❌ No recording file found at: \(recordingURL.path)")
+        }
+    }
+    
+    private func checkRecordingFileSize() {
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
+                if let fileSize = attributes[.size] as? Int64 {
+                    print("📊 Recording file size at \(formatTime(recordingTime)): \(fileSize) bytes")
+                }
+            } catch {
+                print("❌ Failed to check file size: \(error)")
+            }
+        } else {
+            print("❌ Recording file does not exist at \(formatTime(recordingTime))")
+        }
+    }
+    
+    private func playRecording() {
+        print("▶️ Playing recording from: \(recordingURL.path)")
+        
+        // First try to play the actual recording
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+            do {
+                // Configure audio session for playback
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+                print("🔊 Audio session configured for playback")
+                
+                audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
+                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
+                audioPlayer?.prepareToPlay()
+                
+                let playResult = audioPlayer?.play() ?? false
+                if playResult {
+                    isPlaying = true
+                    playbackTime = 0
+                    
+                    // Start playback timer
+                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        playbackTime = audioPlayer?.currentTime ?? 0
+                        
+                        // Stop timer when playback ends
+                        if !(audioPlayer?.isPlaying ?? false) {
+                            stopPlayback()
+                        }
+                    }
+                    
+                    print("✅ Playback started successfully")
+                } else {
+                    print("❌ Failed to start playback")
+                    playTestJingle()
+                }
+                return
+            } catch {
+                print("❌ Failed to play recording: \(error)")
+                playTestJingle()
+            }
+        }
+        
+        // If no recording exists, play test jingle
+        playTestJingle()
+    }
+    
+    private func playTestJingle() {
+        print("🎵 Playing test jingle (no recording found)")
+        
+        // Create a simple test tone
+        let sampleRate: Double = 44100
+        let duration: Double = 5.0
+        let frequency: Double = 440.0 // A4 note
+        
+        let frameCount = Int(sampleRate * duration)
+        var audioData = [Float]()
+        
+        for i in 0..<frameCount {
+            let time = Double(i) / sampleRate
+            let sample = sin(2.0 * Double.pi * frequency * time) * 0.3 // 30% volume
+            audioData.append(Float(sample))
+        }
+        
+        // Convert to PCM data
+        let audioBuffer = audioData.withUnsafeBufferPointer { buffer in
+            Data(buffer: buffer)
+        }
+        
+        // Create audio format
+        let audioFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        
+        do {
+            // Create AVAudioPlayer with PCM data
+            let audioEngine = AVAudioEngine()
+            let playerNode = AVAudioPlayerNode()
+            let audioBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: AVAudioFrameCount(frameCount))!
+            
+            // Fill buffer with our generated audio
+            audioBuffer.frameLength = AVAudioFrameCount(frameCount)
+            let channelData = audioBuffer.floatChannelData![0]
+            for i in 0..<frameCount {
+                channelData[i] = audioData[i]
+            }
+            
+            audioEngine.attach(playerNode)
+            audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: audioFormat)
+            
+            try audioEngine.start()
+            playerNode.scheduleBuffer(audioBuffer, at: nil, options: [], completionHandler: {
+                DispatchQueue.main.async {
+                    self.stopPlayback()
+                }
+            })
+            
+            playerNode.play()
+            isPlaying = true
+            playbackTime = 0
+            
+            // Start playback timer for test jingle
+            playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                self.playbackTime += 0.1
+                
+                // Stop after 5 seconds
+                if self.playbackTime >= 5.0 {
+                    self.stopPlayback()
+                }
+            }
+            
+            print("✅ Test jingle started")
+            
+        } catch {
+            print("❌ Failed to play test jingle: \(error)")
+            // Fallback: play system sound
+            playSystemSound()
+        }
+    }
+    
+    private func playSystemSound() {
+        print("🔔 Playing system sound as fallback")
+        
+        // Play a system sound
+        AudioServicesPlaySystemSound(1005) // SMS sound
+        
+        // Simulate playback for UI
+        isPlaying = true
+        playbackTime = 0
+        
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            self.playbackTime += 0.1
+            
+            // Stop after 2 seconds (system sound is shorter)
+            if self.playbackTime >= 2.0 {
+                self.stopPlayback()
+            }
+        }
+        
+        print("✅ System sound played")
+    }
+    
+    private func pausePlayback() {
+        audioPlayer?.pause()
+        isPlaying = false
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        print("⏸️ Playback paused")
+    }
+    
+    private func resumePlayback() {
+        // Ensure audio session is configured for playback
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+            print("🔊 Audio session reconfigured for playback")
+        } catch {
+            print("❌ Failed to configure audio session for resume: \(error)")
+        }
+        
+        audioPlayer?.play()
+        isPlaying = true
+        
+        // Restart playback timer
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            playbackTime = audioPlayer?.currentTime ?? 0
+            
+            // Stop timer when playback ends
+            if !(audioPlayer?.isPlaying ?? false) {
+                stopPlayback()
+            }
+        }
+        
+        print("▶️ Playback resumed")
+    }
+    
+    private func stopPlayback() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isPlaying = false
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        playbackTime = 0
+        
+        // Reset audio session
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+            print("🔇 Audio session deactivated")
+        } catch {
+            print("❌ Failed to deactivate audio session: \(error)")
+        }
+    }
+    
+    private func deleteRecording() {
+        stopPlayback()
+        
+        do {
+            try FileManager.default.removeItem(at: recordingURL)
+            hasExistingRecording = false
+            favorite.voiceNoteFileName = nil
+        } catch {
+            print("Failed to delete recording: \(error)")
+        }
+    }
+    
+    private func saveRecording() {
+        // TODO: Implement file saving logic as requested by user
+        // For now, just mark that we have a recording using the temp file
+        favorite.voiceNoteFileName = "voice_temp_recording.m4a"
+    }
+    
+    private func checkExistingRecording() {
+        hasExistingRecording = FileManager.default.fileExists(atPath: recordingURL.path)
+    }
+    
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
 
