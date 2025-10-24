@@ -414,12 +414,12 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
                         if isEditMode {
-                            Button {
-                                showingAddToFavorites = true
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                            .accessibilityLabel("Add to favorites")
+                    Button {
+                        showingAddToFavorites = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add to favorites")
                             .padding(.trailing, 8)
                         }
                         
@@ -460,7 +460,7 @@ struct ContentView: View {
             // Load contacts in background after page is displayed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             contactsManager.requestAccess()
-            }
+        }
             
             // Request notification permission
             requestNotificationPermission()
@@ -760,7 +760,7 @@ struct FavoriteContactRow: View {
                             .foregroundColor(.green)
                         Text(email)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                    .foregroundColor(.secondary)
                     }
                 }
                 
@@ -791,9 +791,9 @@ struct FavoriteContactRow: View {
             
             // Action button
             if isEditMode {
-                Button {
+            Button {
                     showingConfig = true
-                } label: {
+            } label: {
                     Image(systemName: "gear")
                         .foregroundColor(.gray)
                         .frame(width: 44, height: 44)
@@ -806,11 +806,11 @@ struct FavoriteContactRow: View {
                     initiateCommunication()
                 } label: {
                     Image(systemName: favorite.communicationMethod.icon)
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
                         .background(Color.green.opacity(0.8))
-                        .clipShape(Circle())
-                }
+                    .clipShape(Circle())
+            }
                 .accessibilityLabel("\(favorite.communicationMethod.rawValue) \(favorite.displayName)")
             }
         }
@@ -1012,8 +1012,8 @@ struct AddToFavoritesView: View {
     private func floatingDoneButton(geometry: GeometryProxy) -> some View {
                     Button("Done") {
             addSelectedContactsToFavorites()
-            dismiss()
-        }
+                        dismiss()
+                    }
         .font(.headline)
         .foregroundColor(.white)
         .padding(.horizontal, 12)
@@ -1109,17 +1109,17 @@ struct ContactRow: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 16) {
+        HStack(spacing: 16) {
                 // Contact photo
                 ContactPhotoView(contactIdentifier: contact.identifier, contactGivenName: contact.givenName, contactFamilyName: contact.familyName, customImageFileName: .constant(nil), size: 40)
-                
-                // Contact info
-                VStack(alignment: .leading, spacing: 2) {
+            
+            // Contact info
+            VStack(alignment: .leading, spacing: 2) {
                     let displayName = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
                     Text(displayName.isEmpty ? "Unknown Contact" : displayName)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
                     if totalContactMethods == 1 && contact.phoneNumbers.count == 1 {
                         Text(contact.phoneNumbers.first?.value.stringValue ?? "")
                             .font(.subheadline)
@@ -1130,15 +1130,15 @@ struct ContactRow: View {
                             .foregroundColor(.secondary)
                     } else {
                         Text("\(contact.phoneNumbers.count) phone\(contact.phoneNumbers.count == 1 ? "" : "s"), \(contact.emailAddresses.count) email\(contact.emailAddresses.count == 1 ? "" : "s")")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
-                
-                Spacer()
-                
+            }
+            
+            Spacer()
+            
                 // Select/Toggle button
-                Button {
+            Button {
                     if totalContactMethods == 1 {
                         // Single contact method - toggle selection (visual only)
                         if contact.phoneNumbers.count == 1 && contact.phoneNumbers.first?.value.stringValue != nil {
@@ -1146,7 +1146,7 @@ struct ContactRow: View {
                                 // Already selected - unselect
                                 isSelected = false
                                 selectedContacts.remove(contact.identifier)
-                            } else {
+                } else {
                                 // Not selected - select (will be added to favorites when session ends)
                                 isSelected = true
                                 selectedContacts.insert(contact.identifier)
@@ -1164,11 +1164,11 @@ struct ContactRow: View {
                         }
                     }
                     // For multiple contact methods, users must select individual ones below
-                } label: {
+            } label: {
                     Image(systemName: totalContactMethods == 1 ? (isSelected ? "star.fill" : "star") : "star.circle")
                         .foregroundColor(totalContactMethods == 1 ? (isSelected ? .yellow : .gray) : .gray)
-                        .font(.title2)
-                }
+                    .font(.title2)
+            }
                 .accessibilityLabel(totalContactMethods == 1 ? "Add to favorites" : "Select individual contact methods below")
                 .disabled(totalContactMethods > 1)
             }
@@ -1617,7 +1617,7 @@ class ContactsManager: ObservableObject {
             // Try to decode with new format first
             if let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
                 // Load favorites immediately without requiring contact access
-                self.favorites = favorites
+            self.favorites = favorites
                 print("✅ Loaded \(favorites.count) favorites from storage")
                 
             // Debug: Log voice filenames being loaded
@@ -1625,9 +1625,11 @@ class ContactsManager: ObservableObject {
                 if let voiceFileName = favorite.voiceNoteFileName {
                     print("📝 ContactsManager: Loaded voice filename for contact \(index) (\(favorite.displayName)): \(voiceFileName)")
                     print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                    print("🔍 DEBUG: Decoded voiceNoteFileName: '\(voiceFileName)'")
                 } else {
                     print("📝 ContactsManager: No voice filename for contact \(index) (\(favorite.displayName))")
                     print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                    print("🔍 DEBUG: Decoded voiceNoteFileName: nil")
                 }
                 
                 // Debug: Log image filenames being loaded
@@ -1726,15 +1728,19 @@ class ContactsManager: ObservableObject {
             
             UserDefaults.standard.set(data, forKey: "favorites")
             print("✅ Successfully saved to UserDefaults")
+            print("🔍 DEBUG: About to encode \(favorites.count) favorites to UserDefaults")
+            print("🔍 DEBUG: Data size before encoding: \(data.count) bytes")
             
             // Debug: Log voice filenames being saved
             for (index, favorite) in favorites.enumerated() {
                 if let voiceFileName = favorite.voiceNoteFileName {
                     print("📝 ContactsManager: Saving voice filename for contact \(index) (\(favorite.displayName)): \(voiceFileName)")
                     print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                    print("🔍 DEBUG: Encoding voiceNoteFileName: '\(voiceFileName)'")
                 } else {
                     print("📝 ContactsManager: No voice filename for contact \(index) (\(favorite.displayName))")
                     print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                    print("🔍 DEBUG: Encoding voiceNoteFileName: nil")
                 }
                 
                 // Debug: Log image filenames being saved
@@ -1769,9 +1775,9 @@ class ContactsManager: ObservableObject {
         )
         
         // Always add the favorite (allow duplicates)
-        favorites.append(favorite)
-        saveFavorites()
-    }
+            favorites.append(favorite)
+            saveFavorites()
+        }
     
     /// Legacy method for backward compatibility
     func addToFavorites(contact: CNContact) {
@@ -1913,6 +1919,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
         try container.encodeIfPresent(customImageFileName, forKey: .customImageFileName)
+        try container.encodeIfPresent(voiceNoteFileName, forKey: .voiceNoteFileName)
         try container.encode(contactGivenName, forKey: .contactGivenName)
         try container.encode(contactFamilyName, forKey: .contactFamilyName)
         try container.encodeIfPresent(emailAddress, forKey: .emailAddress)
@@ -2281,7 +2288,7 @@ struct PhotoPickerSection: View {
             CanvasView(favorite: $favorite)
         }
         .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceRecorderView(favorite: $favorite)
+            VoiceRecorderView(favorite: $favorite, contactsManager: contactsManager)
         }
         .onChange(of: selectedItem) { _, newItem in
             guard let item = newItem else { return }
@@ -4279,6 +4286,7 @@ struct WaveIndicator: View {
 // MARK: - Voice Recorder View
 struct VoiceRecorderView: View {
     @Binding var favorite: FavoriteContact
+    @ObservedObject var contactsManager: ContactsManager
     @Environment(\.dismiss) private var dismiss
     
     @State private var audioRecorder: AVAudioRecorder?
@@ -4288,12 +4296,15 @@ struct VoiceRecorderView: View {
     @State private var recordingTime: TimeInterval = 0
     @State private var recordingTimer: Timer?
     @State private var hasExistingRecording = false
+    @State private var hasNewRecording = false
     @State private var maxRecordingTime: TimeInterval = 5.0 // 5 seconds limit
     @State private var waveAnimationOffset: CGFloat = 0
     @State private var waveTimer: Timer?
     @State private var audioLevel: Float = 0.0
     @State private var playbackTime: TimeInterval = 0
     @State private var playbackTimer: Timer?
+    @State private var pendingDeletion = false
+    @State private var originalVoiceFileName: String?
     
     private var tempRecordingURL: URL {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -4466,16 +4477,31 @@ struct VoiceRecorderView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        // Restore deleted voice if deletion was pending
+                        if pendingDeletion, let originalFileName = originalVoiceFileName {
+                            favorite.voiceNoteFileName = originalFileName
+                            hasExistingRecording = true
+                            pendingDeletion = false
+                            print("↩️ Restored deleted voice recording: \(originalFileName)")
+                        }
+                        
+                        // Clean up temp recording file when canceling
+                        if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
+                            try? FileManager.default.removeItem(at: tempRecordingURL)
+                            print("🗑️ Cleaned up temp recording file on cancel")
+                        }
+                        hasNewRecording = false // Reset new recording flag when canceling
                         dismiss()
                     }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        // Recording is automatically saved to VoiceStorageManager in stopRecording()
+                        // Save the recording to VoiceStorageManager
+                        saveRecordingToVoiceStorage()
                         dismiss()
                     }
-                    .disabled(!hasExistingRecording)
+                    .disabled(!hasNewRecording)
                 }
             }
         }
@@ -4484,6 +4510,7 @@ struct VoiceRecorderView: View {
             print("📝 VoiceRecorderView: onAppear - favorite.contactIdentifier: \(favorite.contactIdentifier)")
             print("📝 VoiceRecorderView: onAppear - favorite.displayName: \(favorite.displayName)")
             checkExistingRecording()
+            hasNewRecording = false // Reset new recording flag when view appears
         }
         .onChange(of: favorite.voiceNoteFileName) { oldValue, newValue in
             print("📝 VoiceStorageManager: voiceNoteFileName changed from '\(oldValue ?? "nil")' to '\(newValue ?? "nil")'")
@@ -4558,7 +4585,6 @@ struct VoiceRecorderView: View {
             // Remove existing temp file if it exists
             if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
                 try FileManager.default.removeItem(at: tempRecordingURL)
-                print("🗑️ Removed existing temp recording file")
             }
             
             audioRecorder = try AVAudioRecorder(url: tempRecordingURL, settings: settings)
@@ -4616,9 +4642,9 @@ struct VoiceRecorderView: View {
         recordingTimer?.invalidate()
         recordingTimer = nil
         
-        // Wait a moment for the file to be written, then save to VoiceStorageManager
+        // Wait a moment for the file to be written, then check if recording exists
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.saveRecordingToVoiceStorage()
+            self.checkRecordingExists()
         }
     }
     
@@ -4665,12 +4691,59 @@ struct VoiceRecorderView: View {
         }
     }
     
+    private func checkRecordingExists() {
+        print("🔍 Checking for recording file at: \(tempRecordingURL.path)")
+        
+        // Check if temp recording file exists and has content
+        guard FileManager.default.fileExists(atPath: tempRecordingURL.path) else {
+            print("🔍 No temp recording file found")
+            return
+        }
+        
+        do {
+            let voiceData = try Data(contentsOf: tempRecordingURL)
+            guard voiceData.count > 0 else {
+                print("🔍 Temp recording file is empty")
+                return
+            }
+            
+            print("🔍 Temp recording file exists with \(voiceData.count) bytes")
+            hasExistingRecording = true
+            hasNewRecording = true
+        } catch {
+            print("🔍 Failed to check temp recording file: \(error)")
+        }
+    }
+    
     private func saveRecordingToVoiceStorage() {
         print("💾 Saving recording to VoiceStorageManager")
         
+        // Handle deletion case
+        if pendingDeletion {
+            if let fileName = originalVoiceFileName {
+                VoiceStorageManager.shared.deleteVoice(named: fileName)
+                print("🗑️ Permanently deleted voice recording: \(fileName)")
+            }
+            favorite.voiceNoteFileName = nil
+            
+            // Update the favorites array in ContactsManager
+            if let index = contactsManager.favorites.firstIndex(where: { $0.contactIdentifier == favorite.contactIdentifier }) {
+                contactsManager.favorites[index].voiceNoteFileName = nil
+                print("📝 VoiceStorageManager: Cleared voiceNoteFileName in favorites array at index \(index)")
+            }
+            
+            // Save to UserDefaults
+            contactsManager.saveFavorites()
+            print("✅ Deletion saved to UserDefaults")
+            
+            // Reset deletion state
+            pendingDeletion = false
+            originalVoiceFileName = nil
+            return
+        }
+        
         // Check if temp file exists and has content
         guard FileManager.default.fileExists(atPath: tempRecordingURL.path) else {
-            print("❌ Temp recording file not found")
             return
         }
         
@@ -4701,12 +4774,39 @@ struct VoiceRecorderView: View {
                 print("📝 VoiceStorageManager: Favorite binding updated - contact: \(favorite.displayName), identifier: \(favorite.contactIdentifier)")
                 print("📝 VoiceStorageManager: Binding should trigger PhotoPickerSection onChange...")
                 
-                // Force save to UserDefaults immediately
-                print("📝 VoiceStorageManager: Triggering immediate save to UserDefaults...")
+                // Directly update the favorites array in ContactsManager
+                if let index = contactsManager.favorites.firstIndex(where: { $0.contactIdentifier == favorite.contactIdentifier }) {
+                    contactsManager.favorites[index].voiceNoteFileName = fileName
+                    print("📝 VoiceStorageManager: Directly updated favorites array at index \(index)")
+                } else {
+                    print("❌ VoiceStorageManager: Could not find favorite in contactsManager.favorites")
+                }
+                
+                // Save to UserDefaults immediately
+                print("📝 VoiceStorageManager: Saving to UserDefaults...")
+                contactsManager.saveFavorites()
+                
+                // Debug: Verify the save worked by checking UserDefaults directly
+                if let savedData = UserDefaults.standard.data(forKey: "favorites"),
+                   let decodedFavorites = try? JSONDecoder().decode([FavoriteContact].self, from: savedData) {
+                    print("🔍 DEBUG: After save, found \(decodedFavorites.count) favorites in UserDefaults")
+                    if let savedFavorite = decodedFavorites.first(where: { $0.contactIdentifier == favorite.contactIdentifier }) {
+                        print("🔍 DEBUG: Saved favorite voiceNoteFileName: \(savedFavorite.voiceNoteFileName ?? "nil")")
+                        print("🔍 DEBUG: Saved favorite contactIdentifier: \(savedFavorite.contactIdentifier)")
+                    } else {
+                        print("🔍 DEBUG: Could not find saved favorite with identifier: \(favorite.contactIdentifier)")
+                    }
+                } else {
+                    print("🔍 DEBUG: Failed to decode favorites from UserDefaults after save")
+                }
+                
+                // Test persistence immediately
+                print("🧪 About to run voice file persistence test...")
+                testVoiceFilePersistence()
+                print("🧪 Voice file persistence test completed.")
                 
                 // Clean up temp file
                 try FileManager.default.removeItem(at: tempRecordingURL)
-                print("🗑️ Cleaned up temp recording file")
                 
             } else {
                 print("❌ Failed to save recording to VoiceStorageManager")
@@ -4717,13 +4817,73 @@ struct VoiceRecorderView: View {
         }
     }
     
+    private func testVoiceFilePersistence() {
+        print("🧪 TESTING VOICE FILE PERSISTENCE...")
+        print("🧪 Test function called for contact: \(favorite.displayName)")
+        print("🧪 Current favorite.voiceNoteFileName: \(favorite.voiceNoteFileName ?? "nil")")
+        
+        // Test 1: Check if voice file exists in file system
+        if let fileName = favorite.voiceNoteFileName {
+            let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName)
+            if let url = fileURL, FileManager.default.fileExists(atPath: url.path) {
+                print("✅ TEST 1 PASSED: Voice file exists in file system: \(fileName)")
+                if let fileSize = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int {
+                    print("✅ TEST 1: File size: \(fileSize) bytes")
+                }
+            } else {
+                print("❌ TEST 1 FAILED: Voice file does not exist in file system: \(fileName)")
+            }
+        } else {
+            print("❌ TEST 1 FAILED: No voice filename in favorite")
+        }
+        
+        // Test 2: Check if voice filename is in UserDefaults
+        if let savedData = UserDefaults.standard.data(forKey: "favorites"),
+           let decodedFavorites = try? JSONDecoder().decode([FavoriteContact].self, from: savedData) {
+            if let savedFavorite = decodedFavorites.first(where: { $0.contactIdentifier == favorite.contactIdentifier }) {
+                if let savedVoiceFileName = savedFavorite.voiceNoteFileName {
+                    print("✅ TEST 2 PASSED: Voice filename found in UserDefaults: \(savedVoiceFileName)")
+                } else {
+                    print("❌ TEST 2 FAILED: No voice filename in UserDefaults for contact: \(favorite.contactIdentifier)")
+                }
+            } else {
+                print("❌ TEST 2 FAILED: Contact not found in UserDefaults: \(favorite.contactIdentifier)")
+            }
+        } else {
+            print("❌ TEST 2 FAILED: Could not decode favorites from UserDefaults")
+        }
+        
+        // Test 3: Check if voice filename is in current favorite object
+        if let currentVoiceFileName = favorite.voiceNoteFileName {
+            print("✅ TEST 3 PASSED: Voice filename in current favorite object: \(currentVoiceFileName)")
+        } else {
+            print("❌ TEST 3 FAILED: No voice filename in current favorite object")
+        }
+        
+        print("🧪 VOICE FILE PERSISTENCE TEST COMPLETE")
+    }
+    
     private func playRecording() {
         print("▶️ Playing recording for contact: \(favorite.displayName)")
         print("📝 VoiceStorageManager: Reading voice filename for playback: \(favorite.voiceNoteFileName ?? "nil")")
         
-        // Check if we have a stored voice file
-        if let fileName = favorite.voiceNoteFileName,
-           let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
+        // Determine which file to play: temp recording or saved voice file
+        var playbackURL: URL?
+        
+        // First check if there's a temp recording
+        if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
+            playbackURL = tempRecordingURL
+            print("🎵 Playing from temp recording")
+        }
+        // Otherwise check if we have a stored voice file
+        else if let fileName = favorite.voiceNoteFileName,
+                let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
+            playbackURL = fileURL
+            print("🎵 Playing from saved voice file: \(fileName)")
+        }
+        
+        // Play the recording if we have a URL
+        if let fileURL = playbackURL {
             do {
                 // Configure audio session for playback
                 let audioSession = AVAudioSession.sharedInstance()
@@ -4750,7 +4910,7 @@ struct VoiceRecorderView: View {
                         }
                     }
                     
-                    print("✅ Playback started successfully from stored file: \(fileName)")
+                    print("✅ Playback started successfully")
                 } else {
                     print("❌ Failed to start playback")
                     playTestJingle()
@@ -4761,7 +4921,7 @@ struct VoiceRecorderView: View {
                 playTestJingle()
             }
         } else {
-            print("❌ No stored voice file found for contact")
+            print("❌ No recording found to play")
             playTestJingle()
         }
     }
@@ -4915,20 +5075,20 @@ struct VoiceRecorderView: View {
     private func deleteRecording() {
         stopPlayback()
         
-        // Delete the stored voice file
-        if let fileName = favorite.voiceNoteFileName {
-            VoiceStorageManager.shared.deleteVoice(named: fileName)
-            favorite.voiceNoteFileName = nil
-            hasExistingRecording = false
-            print("🗑️ Deleted voice recording: \(fileName)")
-            print("📝 VoiceStorageManager: Clearing voice filename from UserDefaults: \(fileName)")
-        }
+        // Store the original filename for potential restoration
+        originalVoiceFileName = favorite.voiceNoteFileName
         
-        // Also clean up any temp file that might exist
+        // Mark for deletion (don't actually delete yet)
+        pendingDeletion = true
+        hasNewRecording = true // Enable the Save button
+        hasExistingRecording = false
+        
+        // Clear the temp recording if it exists
         if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
             try? FileManager.default.removeItem(at: tempRecordingURL)
-            print("🗑️ Cleaned up temp recording file")
         }
+        
+        print("🗑️ Marked voice recording for deletion: \(originalVoiceFileName ?? "none")")
     }
     
     private func checkExistingRecording() {
