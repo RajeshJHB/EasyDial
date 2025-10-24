@@ -132,6 +132,83 @@ class ImageStorageManager {
     }
 }
 
+// MARK: - Voice Storage Manager
+
+class VoiceStorageManager {
+    static let shared = VoiceStorageManager()
+    
+    private let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private let voiceDirectory: URL
+    
+    private init() {
+        voiceDirectory = documentsDirectory.appendingPathComponent("ContactVoice")
+        createVoiceDirectoryIfNeeded()
+    }
+    
+    private func createVoiceDirectoryIfNeeded() {
+        if !FileManager.default.fileExists(atPath: voiceDirectory.path) {
+            try? FileManager.default.createDirectory(at: voiceDirectory, withIntermediateDirectories: true)
+        }
+    }
+    
+    func saveVoice(_ voiceData: Data, for contactId: String) -> String? {
+        let fileName = "\(contactId)_voice_\(UUID().uuidString).m4a"
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try voiceData.write(to: fileURL)
+            print("🎵 VoiceStorageManager: Saved voice file: \(fileName)")
+            return fileName
+        } catch {
+            print("❌ VoiceStorageManager: Failed to save voice file: \(error)")
+            return nil
+        }
+    }
+    
+    func loadVoice(named fileName: String) -> Data? {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { 
+            print("❌ VoiceStorageManager: Voice file not found: \(fileName)")
+            return nil 
+        }
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            print("🎵 VoiceStorageManager: Loaded voice file: \(fileName) (\(data.count) bytes)")
+            return data
+        } catch {
+            print("❌ VoiceStorageManager: Failed to load voice file: \(error)")
+            return nil
+        }
+    }
+    
+    func deleteVoice(named fileName: String) {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            print("🗑️ VoiceStorageManager: Deleted voice file: \(fileName)")
+        } catch {
+            print("❌ VoiceStorageManager: Failed to delete voice file: \(error)")
+        }
+    }
+    
+    func cleanupOrphanedVoices(validFileNames: Set<String>) {
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: voiceDirectory.path) else { return }
+        
+        for file in files {
+            if !validFileNames.contains(file) {
+                deleteVoice(named: file)
+            }
+        }
+    }
+    
+    func getVoiceFileURL(named fileName: String) -> URL? {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        return fileURL
+    }
+}
+
 // MARK: - Communication Enums
 
 enum CommunicationMethod: String, CaseIterable, Codable {
@@ -382,7 +459,7 @@ struct ContentView: View {
             
             // Load contacts in background after page is displayed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                contactsManager.requestAccess()
+            contactsManager.requestAccess()
             }
             
             // Request notification permission
@@ -899,41 +976,41 @@ struct AddToFavoritesView: View {
     
     @ViewBuilder
     private var mainContentView: some View {
-        VStack {
-            // Selection counter
-            if !selectedContacts.isEmpty {
-                HStack {
-                    Image(systemName: "star.fill")
-                        .foregroundColor(.yellow)
-                    Text("\(selectedContacts.count) contact\(selectedContacts.count == 1 ? "" : "s") selected")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
+            VStack {
+                // Selection counter
+                if !selectedContacts.isEmpty {
+                    HStack {
+                        Image(systemName: "star.fill")
+                            .foregroundColor(.yellow)
+                        Text("\(selectedContacts.count) contact\(selectedContacts.count == 1 ? "" : "s") selected")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .padding(.horizontal)
+                
+                if searchText.isEmpty {
+                    Text("Select a contact to add to favorites")
+                        .font(.headline)
+                        .padding()
+                }
+                
+                List(filteredContacts) { contact in
+                    ContactRow(contact: contact, contactsManager: contactsManager, selectedContacts: $selectedContacts)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                }
+                .searchable(text: $searchText, prompt: "Search contacts")
             }
-            
-            if searchText.isEmpty {
-                Text("Select a contact to add to favorites")
-                    .font(.headline)
-                    .padding()
-            }
-            
-            List(filteredContacts) { contact in
-                ContactRow(contact: contact, contactsManager: contactsManager, selectedContacts: $selectedContacts)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            }
-            .searchable(text: $searchText, prompt: "Search contacts")
-        }
     }
     
     @ViewBuilder
     private func floatingDoneButton(geometry: GeometryProxy) -> some View {
-        Button("Done") {
+                    Button("Done") {
             addSelectedContactsToFavorites()
             dismiss()
         }
@@ -956,11 +1033,11 @@ struct AddToFavoritesView: View {
     
     private func addSelectedContactsToFavorites() {
         // Add all selected contacts to favorites (same as toolbar Done button)
-        for selectedId in selectedContacts {
+                        for selectedId in selectedContacts {
             // Check if it's a single contact or individual phone/email selection
             if selectedId.contains("_phone_") {
-                // Individual phone number selection
-                let components = selectedId.split(separator: "_")
+                                // Individual phone number selection
+                                let components = selectedId.split(separator: "_")
                 if components.count >= 3,
                    let contact = filteredContacts.first(where: { $0.identifier == String(components[0]) }) {
                     let phoneId = components[2...].joined(separator: "_")
@@ -979,12 +1056,12 @@ struct AddToFavoritesView: View {
                         let emailString = email.value as String
                         contactsManager.addToFavorites(contact: contact, phoneNumber: emailString, emailAddress: emailString)
                     }
-                }
-            } else {
+                                }
+                            } else {
                 // Single contact selection (no underscore)
-                if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
-                    if contact.phoneNumbers.count == 1,
-                       let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
+                                if let contact = filteredContacts.first(where: { $0.identifier == selectedId }) {
+                                    if contact.phoneNumbers.count == 1,
+                                       let phoneNumber = contact.phoneNumbers.first?.value.stringValue {
                         contactsManager.addToFavorites(contact: contact, phoneNumber: phoneNumber, emailAddress: nil)
                     } else if contact.emailAddresses.count == 1 {
                         let emailString = contact.emailAddresses.first?.value as String? ?? ""
@@ -1150,11 +1227,11 @@ struct PhoneNumberRow: View {
                 Image(systemName: "phone.fill")
                     .font(.caption)
                     .foregroundColor(.blue)
-                Text(phoneString)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            Text(phoneString)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
             }
-            .padding(.leading, 56)
+                .padding(.leading, 56)
             
             Spacer()
             
@@ -1264,9 +1341,16 @@ struct ContactPhotoView: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size, height: size)
                     .clipShape(Circle())
+                    .onAppear {
+                        print("🖼️ ContactPhotoView: Displaying custom image for \(contactGivenName) \(contactFamilyName): \(fileName)")
+                    }
             } else {
                 // Try to load contact image on-demand if not available
                 ContactImageOnDemandView(contactIdentifier: contactIdentifier, size: size)
+                    .onAppear {
+                        print("🖼️ ContactPhotoView: No custom image for \(contactGivenName) \(contactFamilyName), using contact image")
+                        print("🖼️ ContactPhotoView: customImageFileName: \(customImageFileName ?? "nil")")
+                    }
             }
         }
         .id("\(contactIdentifier)_\(customImageFileName ?? "")")
@@ -1428,9 +1512,16 @@ struct ContactPhotoViewRectangular: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: width, height: height)
                     .clipped()
+                    .onAppear {
+                        print("🖼️ ContactPhotoViewRectangular: Displaying custom image for \(contactGivenName) \(contactFamilyName): \(fileName)")
+                    }
             } else {
                 // Try to load contact image on-demand if not available
                 ContactImageOnDemandRectangularView(contactIdentifier: contactIdentifier, width: width, height: height)
+                    .onAppear {
+                        print("🖼️ ContactPhotoViewRectangular: No custom image for \(contactGivenName) \(contactFamilyName), using contact image")
+                        print("🖼️ ContactPhotoViewRectangular: customImageFileName: \(customImageFileName ?? "nil")")
+                    }
             }
         }
         .id("\(contactIdentifier)_\(customImageFileName ?? "")")
@@ -1485,13 +1576,13 @@ class ContactsManager: ObservableObject {
         
         // Move contact enumeration to background thread to avoid blocking UI
         DispatchQueue.global(qos: .userInitiated).async {
-            var contacts: [CNContact] = []
-            
-            do {
+        var contacts: [CNContact] = []
+        
+        do {
                 try self.store.enumerateContacts(with: request) { contact, _ in
-                    contacts.append(contact)
-                }
-                
+                contacts.append(contact)
+            }
+            
                 // Sort contacts on background thread
                 let sortedContacts = contacts.sorted { contact1, contact2 in
                     let name1 = "\(contact1.givenName) \(contact1.familyName)"
@@ -1503,11 +1594,11 @@ class ContactsManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.allContacts = sortedContacts
                     self.isLoadingContactsInBackground = false
-                }
-            } catch {
-                DispatchQueue.main.async {
+            }
+        } catch {
+            DispatchQueue.main.async {
                     self.isLoadingContactsInBackground = false
-                    print("Error loading contacts: \(error.localizedDescription)")
+                print("Error loading contacts: \(error.localizedDescription)")
                 }
             }
         }
@@ -1528,6 +1619,24 @@ class ContactsManager: ObservableObject {
                 // Load favorites immediately without requiring contact access
                 self.favorites = favorites
                 print("✅ Loaded \(favorites.count) favorites from storage")
+                
+            // Debug: Log voice filenames being loaded
+            for (index, favorite) in favorites.enumerated() {
+                if let voiceFileName = favorite.voiceNoteFileName {
+                    print("📝 ContactsManager: Loaded voice filename for contact \(index) (\(favorite.displayName)): \(voiceFileName)")
+                    print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                } else {
+                    print("📝 ContactsManager: No voice filename for contact \(index) (\(favorite.displayName))")
+                    print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                }
+                
+                // Debug: Log image filenames being loaded
+                if let imageFileName = favorite.customImageFileName {
+                    print("🖼️ ContactsManager: Loaded image filename for contact \(index) (\(favorite.displayName)): \(imageFileName)")
+                } else {
+                    print("🖼️ ContactsManager: No image filename for contact \(index) (\(favorite.displayName))")
+                }
+            }
             } else {
                 // Try to migrate from old format (requires contact access)
                 // This will be called later when contact access is granted
@@ -1554,8 +1663,8 @@ class ContactsManager: ObservableObject {
                     // Fetch the contact WITHOUT large image data to avoid memory issues
                     do {
                         let fetchedContact = try store.unifiedContact(withIdentifier: contactIdentifier, keysToFetch: [
-                            CNContactGivenNameKey as CNKeyDescriptor,
-                            CNContactFamilyNameKey as CNKeyDescriptor,
+                        CNContactGivenNameKey as CNKeyDescriptor,
+                        CNContactFamilyNameKey as CNKeyDescriptor,
                             CNContactPhoneNumbersKey as CNKeyDescriptor
                             // Note: NOT fetching image data to avoid large data in memory during migration
                             // Images will be loaded on-demand when needed
@@ -1618,10 +1727,33 @@ class ContactsManager: ObservableObject {
             UserDefaults.standard.set(data, forKey: "favorites")
             print("✅ Successfully saved to UserDefaults")
             
+            // Debug: Log voice filenames being saved
+            for (index, favorite) in favorites.enumerated() {
+                if let voiceFileName = favorite.voiceNoteFileName {
+                    print("📝 ContactsManager: Saving voice filename for contact \(index) (\(favorite.displayName)): \(voiceFileName)")
+                    print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                } else {
+                    print("📝 ContactsManager: No voice filename for contact \(index) (\(favorite.displayName))")
+                    print("📝 ContactsManager: Contact \(index) identifier: \(favorite.contactIdentifier)")
+                }
+                
+                // Debug: Log image filenames being saved
+                if let imageFileName = favorite.customImageFileName {
+                    print("🖼️ ContactsManager: Saving image filename for contact \(index) (\(favorite.displayName)): \(imageFileName)")
+                } else {
+                    print("🖼️ ContactsManager: No image filename for contact \(index) (\(favorite.displayName))")
+                }
+            }
+            
             // Clean up orphaned images
-            let validFileNames = Set(favorites.compactMap { $0.customImageFileName })
-            ImageStorageManager.shared.cleanupOrphanedImages(validFileNames: validFileNames)
+            let validImageFileNames = Set(favorites.compactMap { $0.customImageFileName })
+            ImageStorageManager.shared.cleanupOrphanedImages(validFileNames: validImageFileNames)
             print("🧹 Cleaned up orphaned images")
+            
+            // Clean up orphaned voice files
+            let validVoiceFileNames = Set(favorites.compactMap { $0.voiceNoteFileName })
+            VoiceStorageManager.shared.cleanupOrphanedVoices(validFileNames: validVoiceFileNames)
+            print("🧹 Cleaned up orphaned voice files")
         } else {
             print("❌ Failed to encode favorites data")
         }
@@ -1663,10 +1795,13 @@ class ContactsManager: ObservableObject {
     
     /// Removes favorites at specified indices
     func removeFavorites(at offsets: IndexSet) {
-        // Clean up image files before removing favorites
+        // Clean up image and voice files before removing favorites
         for index in offsets {
             if let fileName = favorites[index].customImageFileName {
                 ImageStorageManager.shared.deleteImage(named: fileName)
+            }
+            if let voiceFileName = favorites[index].voiceNoteFileName {
+                VoiceStorageManager.shared.deleteVoice(named: voiceFileName)
             }
         }
         favorites.remove(atOffsets: offsets)
@@ -1973,7 +2108,7 @@ struct CommunicationConfigView: View {
                 
                 Section("Photo") {
                     if #available(iOS 16.0, *) {
-                        PhotoPickerSection(favorite: $favorite)
+                        PhotoPickerSection(favorite: $favorite, contactsManager: contactsManager)
                     } else {
                         Text("Photo editing requires iOS 16+")
                             .font(.caption)
@@ -2021,13 +2156,15 @@ struct CommunicationConfigView: View {
 @available(iOS 16.0, *)
 struct PhotoPickerSection: View {
     @Binding var favorite: FavoriteContact
+    @ObservedObject var contactsManager: ContactsManager
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var showingCamera = false
     @State private var showingCanvas = false
     @State private var showingVoiceRecorder = false
     
-    init(favorite: Binding<FavoriteContact>) {
+    init(favorite: Binding<FavoriteContact>, contactsManager: ContactsManager) {
         self._favorite = favorite
+        self.contactsManager = contactsManager
     }
     
     var body: some View {
@@ -2036,37 +2173,37 @@ struct PhotoPickerSection: View {
                 ContactPhotoView(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, size: 60)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Gallery picker button
-                    PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                        HStack {
-                            Image(systemName: "photo")
-                                .foregroundColor(.blue)
-                            Text("Gallery")
-                        }
+                        // Gallery picker button
+                        PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                            HStack {
+                                Image(systemName: "photo")
+                                    .foregroundColor(.blue)
+                                Text("Gallery")
+                            }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Camera button
-                    Button {
-                        showingCamera = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "camera")
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        // Camera button
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "camera")
                                 .foregroundColor(.green.opacity(0.7))
-                            Text("Camera")
-                        }
+                                Text("Camera")
+                            }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
                         .background(Color.green.opacity(0.05))
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     
                     // Canvas button
                     Button {
@@ -2164,6 +2301,19 @@ struct PhotoPickerSection: View {
                         }
                     }
                 }
+            }
+        }
+        .onAppear {
+            print("📝 PhotoPickerSection: Appeared with voiceNoteFileName: \(favorite.voiceNoteFileName ?? "nil")")
+            print("📝 PhotoPickerSection: Contact: \(favorite.displayName) (\(favorite.contactIdentifier))")
+        }
+        .onChange(of: favorite.voiceNoteFileName) { oldValue, newValue in
+            print("📝 PhotoPickerSection: voiceNoteFileName changed from '\(oldValue ?? "nil")' to '\(newValue ?? "nil")'")
+            print("📝 PhotoPickerSection: Current favorite.contactIdentifier: \(favorite.contactIdentifier)")
+            print("📝 PhotoPickerSection: Current favorite.displayName: \(favorite.displayName)")
+            if newValue != nil {
+                print("📝 PhotoPickerSection: Triggering save to UserDefaults for voice filename: \(newValue!)")
+                contactsManager.saveFavorites()
             }
         }
     }
@@ -3207,7 +3357,7 @@ struct ContactDetailPage: View {
             isEmail = true
         } else {
             // Clean the phone number - keep only digits and +, then remove +
-            let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
+        let cleanPhoneNumber = favorite.phoneNumber.filter { $0.isNumber || $0 == "+" }
             phoneNumber = cleanPhoneNumber.replacingOccurrences(of: "+", with: "")
             isEmail = false
         }
@@ -4145,7 +4295,7 @@ struct VoiceRecorderView: View {
     @State private var playbackTime: TimeInterval = 0
     @State private var playbackTimer: Timer?
     
-    private var recordingURL: URL {
+    private var tempRecordingURL: URL {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return documentsPath.appendingPathComponent("voice_temp_recording.m4a")
     }
@@ -4322,7 +4472,7 @@ struct VoiceRecorderView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveRecording()
+                        // Recording is automatically saved to VoiceStorageManager in stopRecording()
                         dismiss()
                     }
                     .disabled(!hasExistingRecording)
@@ -4330,9 +4480,19 @@ struct VoiceRecorderView: View {
             }
         }
         .onAppear {
+            print("📝 VoiceRecorderView: onAppear - favorite.voiceNoteFileName: \(favorite.voiceNoteFileName ?? "nil")")
+            print("📝 VoiceRecorderView: onAppear - favorite.contactIdentifier: \(favorite.contactIdentifier)")
+            print("📝 VoiceRecorderView: onAppear - favorite.displayName: \(favorite.displayName)")
             checkExistingRecording()
         }
+        .onChange(of: favorite.voiceNoteFileName) { oldValue, newValue in
+            print("📝 VoiceStorageManager: voiceNoteFileName changed from '\(oldValue ?? "nil")' to '\(newValue ?? "nil")'")
+            if newValue != nil {
+                print("📝 VoiceStorageManager: Voice filename updated, should trigger save to UserDefaults")
+            }
+        }
         .onDisappear {
+            print("📝 VoiceStorageManager: VoiceRecorderView disappearing - final voiceNoteFileName: \(favorite.voiceNoteFileName ?? "nil")")
             stopRecording()
             stopPlayback()
             waveTimer?.invalidate()
@@ -4381,7 +4541,7 @@ struct VoiceRecorderView: View {
             print("   - Sample Rate: 44100 Hz")
             print("   - Channels: 2 (Stereo)")
             print("   - Quality: High")
-            print("📁 Recording URL: \(recordingURL.path)")
+            print("📁 Recording URL: \(tempRecordingURL.path)")
             
             // Ensure Documents directory exists and is writable
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -4395,13 +4555,13 @@ struct VoiceRecorderView: View {
                 return
             }
             
-            // Remove existing file if it exists
-            if FileManager.default.fileExists(atPath: recordingURL.path) {
-                try FileManager.default.removeItem(at: recordingURL)
-                print("🗑️ Removed existing recording file")
+            // Remove existing temp file if it exists
+            if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
+                try FileManager.default.removeItem(at: tempRecordingURL)
+                print("🗑️ Removed existing temp recording file")
             }
             
-            audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
+            audioRecorder = try AVAudioRecorder(url: tempRecordingURL, settings: settings)
             
             if audioRecorder?.prepareToRecord() == true {
                 let success = audioRecorder?.record() ?? false
@@ -4456,24 +4616,24 @@ struct VoiceRecorderView: View {
         recordingTimer?.invalidate()
         recordingTimer = nil
         
-        // Wait a moment for the file to be written
+        // Wait a moment for the file to be written, then save to VoiceStorageManager
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.checkAndCopyRecording()
+            self.saveRecordingToVoiceStorage()
         }
     }
     
     private func checkAndCopyRecording() {
-        print("🔍 Checking for recording file at: \(recordingURL.path)")
+        print("🔍 Checking for recording file at: \(tempRecordingURL.path)")
         
         // Check if we have a recording
-        if FileManager.default.fileExists(atPath: recordingURL.path) {
+        if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
             hasExistingRecording = true
             print("✅ Recording file exists")
             
             // Get file size
             do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
-                if let fileSize = attributes[.size] as? Int64 {
+                let attributes = try FileManager.default.attributesOfItem(atPath: tempRecordingURL.path)
+                if let fileSize = attributes[FileAttributeKey.size] as? Int64 {
                     print("📊 Original file size: \(fileSize) bytes")
                     
                     if fileSize > 0 {
@@ -4486,15 +4646,15 @@ struct VoiceRecorderView: View {
                 print("❌ Failed to get file attributes: \(error)")
             }
         } else {
-            print("❌ No recording file found at: \(recordingURL.path)")
+            print("❌ No recording file found at: \(tempRecordingURL.path)")
         }
     }
     
     private func checkRecordingFileSize() {
-        if FileManager.default.fileExists(atPath: recordingURL.path) {
+        if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
             do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
-                if let fileSize = attributes[.size] as? Int64 {
+                let attributes = try FileManager.default.attributesOfItem(atPath: tempRecordingURL.path)
+                if let fileSize = attributes[FileAttributeKey.size] as? Int64 {
                     print("📊 Recording file size at \(formatTime(recordingTime)): \(fileSize) bytes")
                 }
             } catch {
@@ -4505,11 +4665,65 @@ struct VoiceRecorderView: View {
         }
     }
     
-    private func playRecording() {
-        print("▶️ Playing recording from: \(recordingURL.path)")
+    private func saveRecordingToVoiceStorage() {
+        print("💾 Saving recording to VoiceStorageManager")
         
-        // First try to play the actual recording
-        if FileManager.default.fileExists(atPath: recordingURL.path) {
+        // Check if temp file exists and has content
+        guard FileManager.default.fileExists(atPath: tempRecordingURL.path) else {
+            print("❌ Temp recording file not found")
+            return
+        }
+        
+        do {
+            // Read the temp file data
+            let voiceData = try Data(contentsOf: tempRecordingURL)
+            guard voiceData.count > 0 else {
+                print("❌ Temp recording file is empty")
+                return
+            }
+            
+            print("📊 Temp recording file size: \(voiceData.count) bytes")
+            
+            // Save to VoiceStorageManager
+            if let fileName = VoiceStorageManager.shared.saveVoice(voiceData, for: favorite.contactIdentifier) {
+                // Delete old voice file if it exists
+                if let oldFileName = favorite.voiceNoteFileName {
+                    VoiceStorageManager.shared.deleteVoice(named: oldFileName)
+                }
+                
+                // Update the favorite with the new filename
+                favorite.voiceNoteFileName = fileName
+                hasExistingRecording = true
+                
+                print("✅ Recording saved successfully: \(fileName)")
+                print("📝 VoiceStorageManager: Writing voice filename to UserDefaults: \(fileName)")
+                print("📝 VoiceStorageManager: Updated favorite.voiceNoteFileName = \(favorite.voiceNoteFileName ?? "nil")")
+                print("📝 VoiceStorageManager: Favorite binding updated - contact: \(favorite.displayName), identifier: \(favorite.contactIdentifier)")
+                print("📝 VoiceStorageManager: Binding should trigger PhotoPickerSection onChange...")
+                
+                // Force save to UserDefaults immediately
+                print("📝 VoiceStorageManager: Triggering immediate save to UserDefaults...")
+                
+                // Clean up temp file
+                try FileManager.default.removeItem(at: tempRecordingURL)
+                print("🗑️ Cleaned up temp recording file")
+                
+            } else {
+                print("❌ Failed to save recording to VoiceStorageManager")
+            }
+            
+        } catch {
+            print("❌ Failed to process recording: \(error)")
+        }
+    }
+    
+    private func playRecording() {
+        print("▶️ Playing recording for contact: \(favorite.displayName)")
+        print("📝 VoiceStorageManager: Reading voice filename for playback: \(favorite.voiceNoteFileName ?? "nil")")
+        
+        // Check if we have a stored voice file
+        if let fileName = favorite.voiceNoteFileName,
+           let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
             do {
                 // Configure audio session for playback
                 let audioSession = AVAudioSession.sharedInstance()
@@ -4517,7 +4731,7 @@ struct VoiceRecorderView: View {
                 try audioSession.setActive(true)
                 print("🔊 Audio session configured for playback")
                 
-                audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
+                audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
                 audioPlayer?.volume = 1.0 // Ensure volume is at maximum
                 audioPlayer?.prepareToPlay()
                 
@@ -4536,7 +4750,7 @@ struct VoiceRecorderView: View {
                         }
                     }
                     
-                    print("✅ Playback started successfully")
+                    print("✅ Playback started successfully from stored file: \(fileName)")
                 } else {
                     print("❌ Failed to start playback")
                     playTestJingle()
@@ -4546,10 +4760,10 @@ struct VoiceRecorderView: View {
                 print("❌ Failed to play recording: \(error)")
                 playTestJingle()
             }
+        } else {
+            print("❌ No stored voice file found for contact")
+            playTestJingle()
         }
-        
-        // If no recording exists, play test jingle
-        playTestJingle()
     }
     
     private func playTestJingle() {
@@ -4570,7 +4784,7 @@ struct VoiceRecorderView: View {
         }
         
         // Convert to PCM data
-        let audioBuffer = audioData.withUnsafeBufferPointer { buffer in
+        let _ = audioData.withUnsafeBufferPointer { buffer in
             Data(buffer: buffer)
         }
         
@@ -4701,23 +4915,40 @@ struct VoiceRecorderView: View {
     private func deleteRecording() {
         stopPlayback()
         
-        do {
-            try FileManager.default.removeItem(at: recordingURL)
-            hasExistingRecording = false
+        // Delete the stored voice file
+        if let fileName = favorite.voiceNoteFileName {
+            VoiceStorageManager.shared.deleteVoice(named: fileName)
             favorite.voiceNoteFileName = nil
-        } catch {
-            print("Failed to delete recording: \(error)")
+            hasExistingRecording = false
+            print("🗑️ Deleted voice recording: \(fileName)")
+            print("📝 VoiceStorageManager: Clearing voice filename from UserDefaults: \(fileName)")
+        }
+        
+        // Also clean up any temp file that might exist
+        if FileManager.default.fileExists(atPath: tempRecordingURL.path) {
+            try? FileManager.default.removeItem(at: tempRecordingURL)
+            print("🗑️ Cleaned up temp recording file")
         }
     }
     
-    private func saveRecording() {
-        // TODO: Implement file saving logic as requested by user
-        // For now, just mark that we have a recording using the temp file
-        favorite.voiceNoteFileName = "voice_temp_recording.m4a"
-    }
-    
     private func checkExistingRecording() {
-        hasExistingRecording = FileManager.default.fileExists(atPath: recordingURL.path)
+        print("📝 VoiceStorageManager: Reading voice filename from UserDefaults: \(favorite.voiceNoteFileName ?? "nil")")
+        print("📝 VoiceStorageManager: Favorite contact identifier: \(favorite.contactIdentifier)")
+        print("📝 VoiceStorageManager: Favorite contact name: \(favorite.displayName)")
+        
+        hasExistingRecording = favorite.voiceNoteFileName != nil && 
+                               VoiceStorageManager.shared.getVoiceFileURL(named: favorite.voiceNoteFileName!) != nil
+        
+        if hasExistingRecording {
+            print("📝 VoiceStorageManager: Found existing voice recording: \(favorite.voiceNoteFileName!)")
+        } else {
+            print("📝 VoiceStorageManager: No existing voice recording found")
+            if favorite.voiceNoteFileName == nil {
+                print("📝 VoiceStorageManager: voiceNoteFileName is nil - binding issue!")
+            } else {
+                print("📝 VoiceStorageManager: voiceNoteFileName exists but file not found: \(favorite.voiceNoteFileName!)")
+            }
+        }
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
