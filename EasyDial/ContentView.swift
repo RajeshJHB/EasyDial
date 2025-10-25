@@ -1856,6 +1856,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
         try container.encodeIfPresent(customImageFileName, forKey: .customImageFileName)
+        try container.encodeIfPresent(voiceNoteFileName, forKey: .voiceNoteFileName)
         try container.encode(contactGivenName, forKey: .contactGivenName)
         try container.encode(contactFamilyName, forKey: .contactFamilyName)
         try container.encodeIfPresent(emailAddress, forKey: .emailAddress)
