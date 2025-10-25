@@ -27,9 +27,9 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to microphone to record voice names for contacts.</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5.1</string>
+	<string>1.6.0</string>
 	<key>CFBundleVersion</key>
-	<string>10</string>
+	<string>11</string>
 	<key>CFBundleDisplayName</key>
 	<string>My Dial</string>
 	<key>CFBundleName</key>
