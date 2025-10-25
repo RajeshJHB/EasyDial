@@ -3463,6 +3463,11 @@ struct HelpView: View {
                         .padding(.bottom, 8)
                         
                         HelpSection(
+                            title: "Voice Name Feature",
+                            content: "• Record a custom voice name for each contact to help identify them while swiping\n• In edit mode, tap the microphone icon to record a voice name\n• Record up to 5 seconds of audio\n• Tap the play button to hear your recording\n• Enable the 'Enable Voice Name' setting in the info menu (tap the 'i' icon)\n• When enabled, the contact's voice name will play automatically as you swipe between contacts\n• Each contact can have their own unique voice name, even if they are added multiple times to My Dial"
+                        )
+                        
+                        HelpSection(
                             title: "Navigation Tips",
                             content: "• Swipe gestures work on the entire screen\n• Large invisible tap areas on left/right for easy navigation\n• Double-tap gestures are not required\n• The app remembers your last viewed contact"
                         )
