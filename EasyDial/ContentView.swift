@@ -132,6 +132,83 @@ class ImageStorageManager {
     }
 }
 
+// MARK: - Voice Storage Manager
+
+class VoiceStorageManager {
+    static let shared = VoiceStorageManager()
+    
+    private let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private let voiceDirectory: URL
+    
+    private init() {
+        voiceDirectory = documentsDirectory.appendingPathComponent("ContactVoices")
+        createVoiceDirectoryIfNeeded()
+    }
+    
+    private func createVoiceDirectoryIfNeeded() {
+        if !FileManager.default.fileExists(atPath: voiceDirectory.path) {
+            try? FileManager.default.createDirectory(at: voiceDirectory, withIntermediateDirectories: true)
+        }
+    }
+    
+    func saveVoice(_ voiceData: Data, for contactId: String) -> String? {
+        let fileName = "\(contactId)_voice_\(UUID().uuidString).m4a"
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try voiceData.write(to: fileURL)
+            print("🎵 VoiceStorageManager: Saved voice file: \(fileName)")
+            return fileName
+        } catch {
+            print("❌ VoiceStorageManager: Failed to save voice file: \(error)")
+            return nil
+        }
+    }
+    
+    func loadVoice(named fileName: String) -> Data? {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { 
+            print("❌ VoiceStorageManager: Voice file not found: \(fileName)")
+            return nil 
+        }
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            print("🎵 VoiceStorageManager: Loaded voice file: \(fileName) (\(data.count) bytes)")
+            return data
+        } catch {
+            print("❌ VoiceStorageManager: Failed to load voice file: \(error)")
+            return nil
+        }
+    }
+    
+    func deleteVoice(named fileName: String) {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            print("🗑️ VoiceStorageManager: Deleted voice file: \(fileName)")
+        } catch {
+            print("❌ VoiceStorageManager: Failed to delete voice file: \(error)")
+        }
+    }
+    
+    func cleanupOrphanedVoices(validFileNames: Set<String>) {
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: voiceDirectory.path) else { return }
+        
+        for file in files {
+            if !validFileNames.contains(file) {
+                deleteVoice(named: file)
+            }
+        }
+    }
+    
+    func getVoiceFileURL(named fileName: String) -> URL? {
+        let fileURL = voiceDirectory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        return fileURL
+    }
+}
+
 // MARK: - Communication Enums
 
 enum CommunicationMethod: String, CaseIterable, Codable {
@@ -221,6 +298,7 @@ struct ContentView: View {
     @State private var showingAbout = false
     @State private var showingSuggestions = false
     @AppStorage("alwaysBringToFocus") private var alwaysBringToFocus = false
+    @AppStorage("enableVoiceName") private var enableVoiceName = false
     @State private var didEnterBackground = false
     @State private var waitingForCallToEnd = false
     
@@ -3679,6 +3757,7 @@ struct InfoMenuView: View {
     @Binding var showingSuggestions: Bool
     @State private var showingDonationPopup = false
     @AppStorage("alwaysBringToFocus") private var alwaysBringToFocus = false
+    @AppStorage("enableVoiceName") private var enableVoiceName = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -3736,6 +3815,22 @@ struct InfoMenuView: View {
                         }
                     }
                     .toggleStyle(SwitchToggleStyle(tint: .green))
+                    
+                    Toggle(isOn: $enableVoiceName) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mic.fill")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 20))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Enable Voice Name")
+                                    .font(.body)
+                                Text("Play voice name of contact on swiping")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .orange))
                 }
             }
             .navigationTitle("My Dial")
@@ -4138,6 +4233,7 @@ struct VoiceRecorderView: View {
     @State private var recordingTime: TimeInterval = 0
     @State private var recordingTimer: Timer?
     @State private var hasExistingRecording = false
+    @State private var hasNewRecording = false
     @State private var maxRecordingTime: TimeInterval = 5.0 // 5 seconds limit
     @State private var waveAnimationOffset: CGFloat = 0
     @State private var waveTimer: Timer?
@@ -4316,6 +4412,7 @@ struct VoiceRecorderView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
+                        hasNewRecording = false  // Reset flag when canceling
                         dismiss()
                     }
                 }
@@ -4325,12 +4422,13 @@ struct VoiceRecorderView: View {
                         saveRecording()
                         dismiss()
                     }
-                    .disabled(!hasExistingRecording)
+                    .disabled(!hasNewRecording)
                 }
             }
         }
         .onAppear {
             checkExistingRecording()
+            hasNewRecording = false  // Reset flag on appear so Save button is hidden initially
         }
         .onDisappear {
             stopRecording()
@@ -4468,6 +4566,7 @@ struct VoiceRecorderView: View {
         // Check if we have a recording
         if FileManager.default.fileExists(atPath: recordingURL.path) {
             hasExistingRecording = true
+            hasNewRecording = true
             print("✅ Recording file exists")
             
             // Get file size
@@ -4503,53 +4602,6 @@ struct VoiceRecorderView: View {
         } else {
             print("❌ Recording file does not exist at \(formatTime(recordingTime))")
         }
-    }
-    
-    private func playRecording() {
-        print("▶️ Playing recording from: \(recordingURL.path)")
-        
-        // First try to play the actual recording
-        if FileManager.default.fileExists(atPath: recordingURL.path) {
-            do {
-                // Configure audio session for playback
-                let audioSession = AVAudioSession.sharedInstance()
-                try audioSession.setCategory(.playback, mode: .default)
-                try audioSession.setActive(true)
-                print("🔊 Audio session configured for playback")
-                
-                audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
-                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
-                audioPlayer?.prepareToPlay()
-                
-                let playResult = audioPlayer?.play() ?? false
-                if playResult {
-                    isPlaying = true
-                    playbackTime = 0
-                    
-                    // Start playback timer
-                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                        playbackTime = audioPlayer?.currentTime ?? 0
-                        
-                        // Stop timer when playback ends
-                        if !(audioPlayer?.isPlaying ?? false) {
-                            stopPlayback()
-                        }
-                    }
-                    
-                    print("✅ Playback started successfully")
-                } else {
-                    print("❌ Failed to start playback")
-                    playTestJingle()
-                }
-                return
-            } catch {
-                print("❌ Failed to play recording: \(error)")
-                playTestJingle()
-            }
-        }
-        
-        // If no recording exists, play test jingle
-        playTestJingle()
     }
     
     private func playTestJingle() {
@@ -4701,23 +4753,167 @@ struct VoiceRecorderView: View {
     private func deleteRecording() {
         stopPlayback()
         
-        do {
-            try FileManager.default.removeItem(at: recordingURL)
-            hasExistingRecording = false
+        // Delete from VoiceStorageManager if we have a saved file
+        if let fileName = favorite.voiceNoteFileName {
+            VoiceStorageManager.shared.deleteVoice(named: fileName)
             favorite.voiceNoteFileName = nil
-        } catch {
-            print("Failed to delete recording: \(error)")
+            hasExistingRecording = false
+            hasNewRecording = true  // Enable Save button when deleting
+            print("🗑️ Deleted saved voice file: \(fileName)")
+        }
+        
+        // Also clean up temp file if it exists
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+            do {
+                try FileManager.default.removeItem(at: recordingURL)
+                print("🗑️ Cleaned up temp recording file")
+            } catch {
+                print("Failed to delete temp recording: \(error)")
+            }
         }
     }
     
     private func saveRecording() {
-        // TODO: Implement file saving logic as requested by user
-        // For now, just mark that we have a recording using the temp file
-        favorite.voiceNoteFileName = "voice_temp_recording.m4a"
+        print("💾 Saving recording to VoiceStorageManager")
+        
+        // Check if temp file exists and has content
+        guard FileManager.default.fileExists(atPath: recordingURL.path) else {
+            print("❌ No temp recording file found")
+            return
+        }
+        
+        do {
+            // Read the temp file data
+            let voiceData = try Data(contentsOf: recordingURL)
+            guard voiceData.count > 0 else {
+                print("❌ Temp recording file is empty")
+                return
+            }
+            
+            print("📊 Temp recording file size: \(voiceData.count) bytes")
+            
+            // Save to VoiceStorageManager with unique filename
+            if let fileName = VoiceStorageManager.shared.saveVoice(voiceData, for: favorite.contactIdentifier) {
+                // Delete old voice file if it exists
+                if let oldFileName = favorite.voiceNoteFileName {
+                    VoiceStorageManager.shared.deleteVoice(named: oldFileName)
+                }
+                
+                // Update the favorite with the new filename
+                favorite.voiceNoteFileName = fileName
+                hasExistingRecording = true
+                
+                print("✅ Recording saved successfully: \(fileName)")
+                
+                // Clean up temp file
+                try FileManager.default.removeItem(at: recordingURL)
+                print("🗑️ Cleaned up temp recording file")
+                
+            } else {
+                print("❌ Failed to save recording to VoiceStorageManager")
+            }
+            
+        } catch {
+            print("❌ Failed to process recording: \(error)")
+        }
     }
     
     private func checkExistingRecording() {
-        hasExistingRecording = FileManager.default.fileExists(atPath: recordingURL.path)
+        // Check if we have a saved voice file
+        if let fileName = favorite.voiceNoteFileName {
+            hasExistingRecording = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) != nil
+            print("🔍 Checked existing recording: \(hasExistingRecording ? "Found" : "Not found") - \(fileName)")
+        } else {
+            hasExistingRecording = false
+            print("🔍 No voice filename stored for this contact")
+        }
+    }
+    
+    private func playRecording() {
+        print("▶️ Playing recording")
+        
+        // First try to play from saved voice file
+        if let fileName = favorite.voiceNoteFileName,
+           let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
+            do {
+                // Configure audio session for playback
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+                print("🔊 Audio session configured for playback")
+                
+                audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
+                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
+                audioPlayer?.prepareToPlay()
+                
+                let playResult = audioPlayer?.play() ?? false
+                if playResult {
+                    isPlaying = true
+                    playbackTime = 0
+                    
+                    // Start playback timer
+                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        playbackTime = audioPlayer?.currentTime ?? 0
+                        
+                        // Stop timer when playback ends
+                        if !(audioPlayer?.isPlaying ?? false) {
+                            stopPlayback()
+                        }
+                    }
+                    
+                    print("✅ Playback started successfully from saved file: \(fileName)")
+                } else {
+                    print("❌ Failed to start playback")
+                    playTestJingle()
+                }
+                return
+            } catch {
+                print("❌ Failed to play saved recording: \(error)")
+            }
+        }
+        
+        // Fallback: try to play temp file if it exists
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+            do {
+                // Configure audio session for playback
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+                print("🔊 Audio session configured for playback")
+                
+                audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
+                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
+                audioPlayer?.prepareToPlay()
+                
+                let playResult = audioPlayer?.play() ?? false
+                if playResult {
+                    isPlaying = true
+                    playbackTime = 0
+                    
+                    // Start playback timer
+                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        playbackTime = audioPlayer?.currentTime ?? 0
+                        
+                        // Stop timer when playback ends
+                        if !(audioPlayer?.isPlaying ?? false) {
+                            stopPlayback()
+                        }
+                    }
+                    
+                    print("✅ Playback started successfully from temp file")
+                } else {
+                    print("❌ Failed to start playback")
+                    playTestJingle()
+                }
+                return
+            } catch {
+                print("❌ Failed to play temp recording: \(error)")
+            }
+        }
+        
+        // If no recording found, play test jingle
+        print("❌ No recording found to play")
+        playTestJingle()
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
