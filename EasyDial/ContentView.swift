@@ -30,11 +30,11 @@ class CallDetector: NSObject, ObservableObject {
         let regionCode = locale.region?.identifier ?? ""
         
         if regionCode == "CN" || regionCode == "CHN" {
-            print("⚠️ Current locale is China (\(regionCode)) - CallKit cannot be used")
+//             print("⚠️ Current locale is China (\(regionCode)) - CallKit cannot be used")
             canUseCallKit = false
         } else {
             canUseCallKit = true
-            print("✅ CallKit enabled for region: \(regionCode)")
+//             print("✅ CallKit enabled for region: \(regionCode)")
         }
         
         super.init()
@@ -61,16 +61,16 @@ extension CallDetector: CXCallObserverDelegate {
         let wasOnCall = isOnCall
         isOnCall = callObserver.calls.contains { !$0.hasEnded }
         
-        print("📞 Call state changed:")
-        print("  - Has ended: \(call.hasEnded)")
-        print("  - Is outgoing: \(call.isOutgoing)")
-        print("  - On hold: \(call.isOnHold)")
-        print("  - Has connected: \(call.hasConnected)")
-        print("  - Currently on call: \(isOnCall)")
+//         print("📞 Call state changed:")
+//         print("  - Has ended: \(call.hasEnded)")
+//         print("  - Is outgoing: \(call.isOutgoing)")
+//         print("  - On hold: \(call.isOnHold)")
+//         print("  - Has connected: \(call.hasConnected)")
+//         print("  - Currently on call: \(isOnCall)")
         
         // If call just ended and we were waiting to send notifications
         if wasOnCall && !isOnCall {
-            print("📞 Call ended - checking if we need to send notifications")
+            // print("📞 Call ended - checking if we need to send notifications")
             NotificationCenter.default.post(name: NSNotification.Name("CallEnded"), object: nil)
         }
     }
@@ -157,10 +157,10 @@ class VoiceStorageManager {
         
         do {
             try voiceData.write(to: fileURL)
-            print("🎵 VoiceStorageManager: Saved voice file: \(fileName)")
+//             print("🎵 VoiceStorageManager: Saved voice file: \(fileName)")
             return fileName
         } catch {
-            print("❌ VoiceStorageManager: Failed to save voice file: \(error)")
+//             print("❌ VoiceStorageManager: Failed to save voice file: \(error)")
             return nil
         }
     }
@@ -168,16 +168,16 @@ class VoiceStorageManager {
     func loadVoice(named fileName: String) -> Data? {
         let fileURL = voiceDirectory.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { 
-            print("❌ VoiceStorageManager: Voice file not found: \(fileName)")
+//             print("❌ VoiceStorageManager: Voice file not found: \(fileName)")
             return nil 
         }
         
         do {
             let data = try Data(contentsOf: fileURL)
-            print("🎵 VoiceStorageManager: Loaded voice file: \(fileName) (\(data.count) bytes)")
+//             print("🎵 VoiceStorageManager: Loaded voice file: \(fileName) (\(data.count) bytes)")
             return data
         } catch {
-            print("❌ VoiceStorageManager: Failed to load voice file: \(error)")
+//             print("❌ VoiceStorageManager: Failed to load voice file: \(error)")
             return nil
         }
     }
@@ -186,9 +186,9 @@ class VoiceStorageManager {
         let fileURL = voiceDirectory.appendingPathComponent(fileName)
         do {
             try FileManager.default.removeItem(at: fileURL)
-            print("🗑️ VoiceStorageManager: Deleted voice file: \(fileName)")
+//             print("🗑️ VoiceStorageManager: Deleted voice file: \(fileName)")
         } catch {
-            print("❌ VoiceStorageManager: Failed to delete voice file: \(error)")
+//             print("❌ VoiceStorageManager: Failed to delete voice file: \(error)")
         }
     }
     
@@ -325,16 +325,16 @@ struct ContentView: View {
                         contactsManager: contactsManager,
                         initialIndex: lastViewedContactIndex,
                         onIndexChanged: { newIndex in
-                            print("🔍 ContactDetailView onIndexChanged: \(newIndex)")
+//                             print("🔍 ContactDetailView onIndexChanged: \(newIndex)")
                             lastViewedContactIndex = newIndex
                             // Save to UserDefaults whenever the index changes
-                            print("💾 Saving lastViewedContactIndex: \(newIndex)")
+//                             print("💾 Saving lastViewedContactIndex: \(newIndex)")
                             
                             // Debug: Check if there's already large data in UserDefaults
                             if let existingData = UserDefaults.standard.data(forKey: "favorites") {
-                                print("⚠️ WARNING: Existing favorites data in UserDefaults: \(existingData.count) bytes")
+//                                 print("⚠️ WARNING: Existing favorites data in UserDefaults: \(existingData.count) bytes")
                                 if existingData.count > 4 * 1024 * 1024 {
-                                    print("🚨 CRITICAL: Existing data exceeds 4MB limit!")
+//                                     print("🚨 CRITICAL: Existing data exceeds 4MB limit!")
                                 }
                             }
                             
@@ -346,28 +346,28 @@ struct ContentView: View {
                                 if let data = userDefaults.data(forKey: key) {
                                     totalSize += data.count
                                     if data.count > 100000 { // 100KB
-                                        print("🔍 Large UserDefaults key '\(key)': \(data.count) bytes")
+//                                         print("🔍 Large UserDefaults key '\(key)': \(data.count) bytes")
                                     }
                                 }
                             }
-                            print("🔍 Total UserDefaults size: \(totalSize) bytes")
+//                             print("🔍 Total UserDefaults size: \(totalSize) bytes")
                             
                             // Check if we need to save favorites with clean data
                             if let existingData = UserDefaults.standard.data(forKey: "favorites"),
                                existingData.count > 1000000 { // 1MB threshold
-                                print("🔄 Large favorites data detected (\(existingData.count) bytes), saving clean version...")
+//                                 print("🔄 Large favorites data detected (\(existingData.count) bytes), saving clean version...")
                                 // Save favorites with clean data (no large CNContact image data)
                                 contactsManager.saveFavorites()
                             }
                             
                             UserDefaults.standard.set(newIndex, forKey: lastViewedContactKey)
-                            print("✅ Saved lastViewedContactIndex: \(newIndex)")
+//                             print("✅ Saved lastViewedContactIndex: \(newIndex)")
                         },
                         onReturnToFavorites: {
                             // Return to favorites view
                             lastViewedContactIndex = -1
                             UserDefaults.standard.set(-1, forKey: lastViewedContactKey)
-                            print("🔍 Returned to favorites view")
+//                             print("🔍 Returned to favorites view")
                         }
                     )
                 } else {
@@ -394,11 +394,11 @@ struct ContentView: View {
                             // If currently -1, change to 0, otherwise keep current value
                             if lastViewedContactIndex == -1 {
                                 lastViewedContactIndex = 0
-                                print("🔍 My Dial button pressed, changed lastViewedContactIndex from -1 to 0")
+//                                 print("🔍 My Dial button pressed, changed lastViewedContactIndex from -1 to 0")
                                 // The view will automatically update to show the contact detail view
                                 // since lastViewedContactIndex is now != -1
                             } else {
-                                print("🔍 My Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
+//                                 print("🔍 My Dial button pressed, keeping lastViewedContactIndex: \(lastViewedContactIndex)")
                             }
                         }
                         .padding(.horizontal, 12)
@@ -469,22 +469,22 @@ struct ContentView: View {
         .onChange(of: contactsManager.favorites) {
             // Load the last viewed contact index from UserDefaults when contacts are loaded
             let savedIndex = UserDefaults.standard.integer(forKey: lastViewedContactKey)
-            print("🔍 Loading saved index: \(savedIndex), favorites count: \(contactsManager.favorites.count)")
+//             print("🔍 Loading saved index: \(savedIndex), favorites count: \(contactsManager.favorites.count)")
             
             // Handle no contacts case
             if contactsManager.favorites.isEmpty {
                 lastViewedContactIndex = -1
-                print("🔍 No contacts available, set lastViewedContactIndex to -1")
+//                 print("🔍 No contacts available, set lastViewedContactIndex to -1")
             } else if savedIndex >= 0 && savedIndex < contactsManager.favorites.count {
                 lastViewedContactIndex = savedIndex
-                print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
+//                 print("🔍 Set lastViewedContactIndex to: \(lastViewedContactIndex)")
                 
                 // Note: The contact detail view will be shown directly in the main view
                 // if lastViewedContactIndex != -1, no need for separate navigation
             } else {
                 // Invalid saved index - keep at -1 to show favorites page
                 lastViewedContactIndex = -1
-                print("🔍 Saved index \(savedIndex) is invalid, keeping lastViewedContactIndex at -1 to show favorites page")
+//                 print("🔍 Saved index \(savedIndex) is invalid, keeping lastViewedContactIndex at -1 to show favorites page")
             }
             
             // Mark that we've loaded the initial index
@@ -493,42 +493,44 @@ struct ContentView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             switch newPhase {
             case .active:
-                print("🟢 Screen is ACTIVE - App is in foreground")
+//                 print("🟢 Screen is ACTIVE - App is in foreground")
                 // Reset flags when becoming active
                 didResignActive = false
                 didSeeInactive = false
             case .inactive:
-                print("🟡 Screen is INACTIVE - App is transitioning")
+//                 print("🟡 Screen is INACTIVE - App is transitioning")
                 // Mark that we saw the INACTIVE state
                 didSeeInactive = true
             case .background:
-                print("🔴 Screen is OFF/BACKGROUND - App went to background or screen locked")
+//                 print("🔴 Screen is OFF/BACKGROUND - App went to background or screen locked")
                 // Display switchedToAnotherApp state after background message
-                print("📊 switchedToAnotherApp = \(switchedToAnotherApp)")
+//                 print("📊 switchedToAnotherApp = \(switchedToAnotherApp)")
+                break
             @unknown default:
-                print("⚪️ Unknown screen state")
+//                 print("⚪️ Unknown screen state")
+                break
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            print("⚠️ App will resign active - Screen is resigning notification")
+//             print("⚠️ App will resign active - Screen is resigning notification")
             // Save the last viewed contact index when app becomes inactive
             UserDefaults.standard.set(lastViewedContactIndex, forKey: lastViewedContactKey)
             // Mark that we've received the willResignActive notification
             didResignActive = true
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-            print("🌙 App entered background - Screen is in background notification")
+//             print("🌙 App entered background - Screen is in background notification")
             
             // Check the sequence to determine if user switched to another app
             if didResignActive {
                 if didSeeInactive {
                     // Sequence: willResignActive → INACTIVE → didEnterBackground
                     switchedToAnotherApp = true
-                    print("✅ Sequence: willResignActive → INACTIVE → didEnterBackground → switchedToAnotherApp = true")
+//                     print("✅ Sequence: willResignActive → INACTIVE → didEnterBackground → switchedToAnotherApp = true")
                 } else {
                     // Sequence: willResignActive → didEnterBackground (no INACTIVE)
                     switchedToAnotherApp = false
-                    print("✅ Sequence: willResignActive → didEnterBackground (no INACTIVE) → switchedToAnotherApp = false (screen lock)")
+//                     print("✅ Sequence: willResignActive → didEnterBackground (no INACTIVE) → switchedToAnotherApp = false (screen lock)")
                 }
             }
             
@@ -538,14 +540,14 @@ struct ContentView: View {
                 
                 // Check if user is on a call
                 if callDetector.isOnCall {
-                    print("📞 User is on a call - will send notifications after call ends")
+//                     print("📞 User is on a call - will send notifications after call ends")
                     waitingForCallToEnd = true
                 } else {
-                    print("📱 User switched to another app (not on call) - sending notifications")
+//                     print("📱 User switched to another app (not on call) - sending notifications")
                     scheduleReturnNotification()
                 }
             } else if !switchedToAnotherApp {
-                print("🔒 Screen locked (no app switch) - NOT sending notifications")
+//                 print("🔒 Screen locked (no app switch) - NOT sending notifications")
             }
             
             // Reset flags
@@ -553,16 +555,16 @@ struct ContentView: View {
             didSeeInactive = false
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            print("☀️ App became active - Screen is ON and app is in foreground")
-            print("🔄 didEnterBackground: \(didEnterBackground), alwaysBringToFocus: \(alwaysBringToFocus)")
+//             print("☀️ App became active - Screen is ON and app is in foreground")
+//             print("🔄 didEnterBackground: \(didEnterBackground), alwaysBringToFocus: \(alwaysBringToFocus)")
             
             // Cancel any pending notifications when returning to app
             cancelReturnNotification()
             
             // Handle returning from background
             if didEnterBackground && alwaysBringToFocus {
-                print("🔄 App returning to foreground with 'Always Bring to Focus' enabled")
-                print("🔄 Current view should show contact at index: \(lastViewedContactIndex)")
+//                 print("🔄 App returning to foreground with 'Always Bring to Focus' enabled")
+//                 print("🔄 Current view should show contact at index: \(lastViewedContactIndex)")
                 // Reset the flags
                 didEnterBackground = false
                 waitingForCallToEnd = false
@@ -573,7 +575,7 @@ struct ContentView: View {
                 // Reset flags even if setting is disabled
                 didEnterBackground = false
                 waitingForCallToEnd = false
-                print("🔄 App returning to foreground (Always Bring to Focus disabled)")
+//                 print("🔄 App returning to foreground (Always Bring to Focus disabled)")
             }
             
             // Reset detection flags
@@ -582,17 +584,17 @@ struct ContentView: View {
             switchedToAnotherApp = false
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            print("🌅 App will enter foreground - Screen turning ON or returning to app")
+//             print("🌅 App will enter foreground - Screen turning ON or returning to app")
             // Reset flags
             didResignActive = false
             didSeeInactive = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CallEnded"))) { _ in
-            print("📞 Call ended notification received")
+//             print("📞 Call ended notification received")
             
             // If we were waiting for call to end and still in background, send notifications now
             if waitingForCallToEnd && didEnterBackground && alwaysBringToFocus {
-                print("📱 Call ended - now sending notifications")
+//                 print("📱 Call ended - now sending notifications")
                 waitingForCallToEnd = false
                 scheduleReturnNotification()
             }
@@ -603,9 +605,9 @@ struct ContentView: View {
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("📱 Notification permission granted")
+//                 print("📱 Notification permission granted")
             } else if let error = error {
-                print("❌ Notification permission error: \(error.localizedDescription)")
+//                 print("❌ Notification permission error: \(error.localizedDescription)")
             }
         }
     }
@@ -628,9 +630,9 @@ struct ContentView: View {
         
         UNUserNotificationCenter.current().add(firstRequest) { error in
             if let error = error {
-                print("❌ Failed to schedule first notification: \(error.localizedDescription)")
+//                 print("❌ Failed to schedule first notification: \(error.localizedDescription)")
             } else {
-                print("📱 First notification scheduled successfully (2 seconds)")
+//                 print("📱 First notification scheduled successfully (2 seconds)")
             }
         }
         
@@ -645,9 +647,9 @@ struct ContentView: View {
         
         UNUserNotificationCenter.current().add(repeatingRequest) { error in
             if let error = error {
-                print("❌ Failed to schedule repeating notification: \(error.localizedDescription)")
+//                 print("❌ Failed to schedule repeating notification: \(error.localizedDescription)")
             } else {
-                print("📱 Repeating notification scheduled successfully (every 60 seconds)")
+//                 print("📱 Repeating notification scheduled successfully (every 60 seconds)")
             }
         }
     }
@@ -656,7 +658,7 @@ struct ContentView: View {
     private func cancelReturnNotification() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["returnToMyDial_first", "returnToMyDial_repeating"])
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["returnToMyDial_first", "returnToMyDial_repeating"])
-        print("📱 All notifications cancelled")
+//         print("📱 All notifications cancelled")
     }
     
     /// View shown when no favorites are available
@@ -864,7 +866,7 @@ struct FavoriteContactRow: View {
                     viewController.present(alert, animated: true)
                 }
             }
-            print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
+//             print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
             return // Exit without processing
         }
         
@@ -911,15 +913,15 @@ struct FavoriteContactRow: View {
         }
         
         if let url = URL(string: urlString) {
-            print("🔍 Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
+//             print("🔍 Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
                 let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
                     .universalLinksOnly: false  // Allow custom URL schemes
                 ]
                 UIApplication.shared.open(url, options: options) { success in
-                    print("🔍 URL opened successfully: \(success)")
+//                     print("🔍 URL opened successfully: \(success)")
                     if !success {
-                        print("🔍 Failed to open URL: \(urlString)")
+//                         print("🔍 Failed to open URL: \(urlString)")
                     }
                 }
             }
@@ -935,7 +937,7 @@ struct FavoriteContactRow: View {
                     .universalLinksOnly: false
                 ]
                 UIApplication.shared.open(url, options: options) { success in
-                    print("🔍 Legacy call URL opened successfully: \(success)")
+//                     print("🔍 Legacy call URL opened successfully: \(success)")
                 }
             }
         }
@@ -1534,10 +1536,10 @@ class ContactsManager: ObservableObject {
                     // Check if we need to migrate old favorites format
                     if let data = UserDefaults.standard.data(forKey: "favorites") {
                         if data.count > 4 * 1024 * 1024 {
-                            print("🚨 Migrating large favorites data now that contact access is granted...")
+//                             print("🚨 Migrating large favorites data now that contact access is granted...")
                             self?.migrateOldFavorites(from: data)
                         } else if (try? JSONDecoder().decode([FavoriteContact].self, from: data)) == nil {
-                            print("🔄 Migrating old favorites format now that contact access is granted...")
+//                             print("🔄 Migrating old favorites format now that contact access is granted...")
                             self?.migrateOldFavorites(from: data)
                         }
                     }
@@ -1594,9 +1596,9 @@ class ContactsManager: ObservableObject {
     /// Loads favorites from UserDefaults (can be called without contact access)
     func loadFavorites() {
         if let data = UserDefaults.standard.data(forKey: "favorites") {
-            print("🔍 Loading favorites data: \(data.count) bytes")
+//             print("🔍 Loading favorites data: \(data.count) bytes")
             if data.count > 4 * 1024 * 1024 {
-                print("🚨 CRITICAL: Existing favorites data exceeds 4MB limit! Forcing migration...")
+//                 print("🚨 CRITICAL: Existing favorites data exceeds 4MB limit! Forcing migration...")
                 // Force migration by calling migrateOldFavorites (requires contact access)
                 // This will be called later when contact access is granted
                 return
@@ -1605,18 +1607,18 @@ class ContactsManager: ObservableObject {
             if let favorites = try? JSONDecoder().decode([FavoriteContact].self, from: data) {
                 // Load favorites immediately without requiring contact access
                 self.favorites = favorites
-                print("✅ Loaded \(favorites.count) favorites from storage")
+//                 print("✅ Loaded \(favorites.count) favorites from storage")
             } else {
                 // Try to migrate from old format (requires contact access)
                 // This will be called later when contact access is granted
-                print("⚠️ Old format detected, will migrate when contact access is granted")
+//                 print("⚠️ Old format detected, will migrate when contact access is granted")
             }
         }
     }
     
     /// Migrates favorites from old format (with customImageData) to new format (with customImageFileName)
     private func migrateOldFavorites(from data: Data) {
-        print("🔄 Starting migration from old format...")
+//         print("🔄 Starting migration from old format...")
         
         // Try to decode as raw JSON to access old customImageData
         if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
@@ -1645,7 +1647,7 @@ class ContactsManager: ObservableObject {
                     // Handle old customImageData if it exists
                     var customImageData: Data? = nil
                     if let imageData = item["customImageData"] as? Data {
-                        print("🔄 Found old image data for \(displayName), size: \(imageData.count) bytes")
+//                         print("🔄 Found old image data for \(displayName), size: \(imageData.count) bytes")
                         customImageData = imageData
                     }
                     
@@ -1660,48 +1662,48 @@ class ContactsManager: ObservableObject {
                     )
                     
                     migratedFavorites.append(favorite)
-                    print("✅ Migrated favorite: \(displayName)")
+//                     print("✅ Migrated favorite: \(displayName)")
                 } catch {
-                    print("❌ Failed to fetch contact during migration: \(error)")
+//                     print("❌ Failed to fetch contact during migration: \(error)")
                 }
             }
             
-            print("🔄 Migration completed. Migrated \(migratedFavorites.count) favorites")
+//             print("🔄 Migration completed. Migrated \(migratedFavorites.count) favorites")
             self.favorites = migratedFavorites
             
             // Save the migrated data - this will use the new file-based system
-            print("💾 Saving migrated data...")
+//             print("💾 Saving migrated data...")
             saveFavorites()
-            print("✅ Migration and save completed successfully")
+//             print("✅ Migration and save completed successfully")
         } else {
-            print("❌ Failed to parse old favorites data as JSON")
+//             print("❌ Failed to parse old favorites data as JSON")
         }
     }
     
     /// Saves favorites to UserDefaults
     func saveFavorites() {
-        print("💾 saveFavorites called with \(favorites.count) favorites")
+//         print("💾 saveFavorites called with \(favorites.count) favorites")
         
         // Note: No longer debugging CNContact image data since we don't store CNContact objects
         
         // Check data size before encoding
-        print("💾 About to encode \(favorites.count) favorites")
+//         print("💾 About to encode \(favorites.count) favorites")
         
         if let data = try? JSONEncoder().encode(favorites) {
-            print("💾 Encoded data size: \(data.count) bytes")
+//             print("💾 Encoded data size: \(data.count) bytes")
             if data.count > 4 * 1024 * 1024 {
-                print("⚠️ WARNING: Data size (\(data.count) bytes) exceeds 4MB limit!")
+//                 print("⚠️ WARNING: Data size (\(data.count) bytes) exceeds 4MB limit!")
             }
             
             UserDefaults.standard.set(data, forKey: "favorites")
-            print("✅ Successfully saved to UserDefaults")
+//             print("✅ Successfully saved to UserDefaults")
             
             // Clean up orphaned images
             let validFileNames = Set(favorites.compactMap { $0.customImageFileName })
             ImageStorageManager.shared.cleanupOrphanedImages(validFileNames: validFileNames)
-            print("🧹 Cleaned up orphaned images")
+//             print("🧹 Cleaned up orphaned images")
         } else {
-            print("❌ Failed to encode favorites data")
+//             print("❌ Failed to encode favorites data")
         }
     }
     
@@ -1856,6 +1858,7 @@ struct FavoriteContact: Identifiable, Codable, Equatable {
         try container.encode(communicationMethod, forKey: .communicationMethod)
         try container.encode(communicationApp, forKey: .communicationApp)
         try container.encodeIfPresent(customImageFileName, forKey: .customImageFileName)
+        try container.encodeIfPresent(voiceNoteFileName, forKey: .voiceNoteFileName)
         try container.encode(contactGivenName, forKey: .contactGivenName)
         try container.encode(contactFamilyName, forKey: .contactFamilyName)
         try container.encodeIfPresent(emailAddress, forKey: .emailAddress)
@@ -1878,53 +1881,53 @@ class AppDetectionUtility {
     // The schemes that need to be added are: whatsapp, tg, telegram, facetime, facetime-audio, sgnl, viber, tel, sms
     static func isAppInstalled(urlScheme: String) -> Bool {
         guard let url = URL(string: "\(urlScheme)://") else { 
-            print("❌ Invalid URL scheme: \(urlScheme)")
+//             print("❌ Invalid URL scheme: \(urlScheme)")
             return false 
         }
         
         // Check if we're already on the main thread
         if Thread.isMainThread {
             let canOpen = UIApplication.shared.canOpenURL(url)
-            print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+//             print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
             return canOpen
         } else {
             // If not on main thread, dispatch to main thread synchronously
             var canOpen = false
             DispatchQueue.main.sync {
                 canOpen = UIApplication.shared.canOpenURL(url)
-                print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
+//                 print("🔍 Checking \(urlScheme):// - Result: \(canOpen)")
             }
             return canOpen
         }
     }
     
     static func getInstalledCommunicationApps() -> [CommunicationApp] {
-        print("🚀 Starting app detection...")
+//         print("🚀 Starting app detection...")
         var installedApps: [CommunicationApp] = []
         
         // Always include Phone iOS as it's built into iOS
         installedApps.append(.phoneMessage)
-        print("✅ Added built-in app: Phone iOS")
+//         print("✅ Added built-in app: Phone iOS")
         
         // Check for other installed apps
         let otherApps: [CommunicationApp] = [.whatsapp, .telegram, .facetime, .signal, .viber]
         
         for app in otherApps {
-            print("🔍 Checking \(app.rawValue)...")
+//             print("🔍 Checking \(app.rawValue)...")
             
             // Try the main URL scheme
             let isInstalled = isAppInstalled(urlScheme: app.urlScheme)
             
             if isInstalled {
                 installedApps.append(app)
-                print("✅ \(app.rawValue) is installed!")
+//                 print("✅ \(app.rawValue) is installed!")
             } else {
-                print("❌ \(app.rawValue) is not installed")
+//                 print("❌ \(app.rawValue) is not installed")
             }
         }
         
         let result = installedApps.sorted { $0.rawValue < $1.rawValue }
-        print("🎯 Final result: \(result.map { $0.rawValue })")
+//         print("🎯 Final result: \(result.map { $0.rawValue })")
         return result
     }
     
@@ -2014,7 +2017,7 @@ struct CommunicationConfigView: View {
                 
                 Section {
                 VStack(alignment: .leading, spacing: 8) {
-                        Text("Preview:")
+                        Text("Preview: \(favorite.displayName)")
                             .font(.headline)
                         
                         VStack(alignment: .leading, spacing: 12) {
@@ -2619,7 +2622,7 @@ struct CanvasView: View {
                             fontSize = 24
                             // Also clear saved canvas data
                             UserDefaults.standard.removeObject(forKey: canvasDataKey)
-                            print("🗑️ Canvas cleared and saved data deleted")
+//                             print("🗑️ Canvas cleared and saved data deleted")
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "trash")
@@ -2816,7 +2819,7 @@ struct CanvasView: View {
                 
                 // Save canvas data for future editing
                 saveCanvasData()
-                print("✅ Canvas saved as image and data saved for contact: \(favorite.contactIdentifier)")
+//                 print("✅ Canvas saved as image and data saved for contact: \(favorite.contactIdentifier)")
             }
         }
         
@@ -2827,7 +2830,7 @@ struct CanvasView: View {
         let canvasData = CanvasData(drawings: drawings, textItems: textItems)
         if let encoded = try? JSONEncoder().encode(canvasData) {
             UserDefaults.standard.set(encoded, forKey: canvasDataKey)
-            print("💾 Canvas data saved (drawings: \(drawings.count), text items: \(textItems.count))")
+//             print("💾 Canvas data saved (drawings: \(drawings.count), text items: \(textItems.count))")
         }
     }
     
@@ -2844,13 +2847,13 @@ struct CanvasView: View {
             for textItem in textItems {
                 itemHistory.append(.text(id: textItem.id))
             }
-            print("📂 Canvas data loaded (drawings: \(drawings.count), text items: \(textItems.count))")
+//             print("📂 Canvas data loaded (drawings: \(drawings.count), text items: \(textItems.count))")
         } else {
             // If no saved data, start with empty canvas
             drawings = []
             textItems = []
             itemHistory = []
-            print("ℹ️ No saved canvas data found - starting with empty canvas")
+//             print("ℹ️ No saved canvas data found - starting with empty canvas")
         }
     }
     
@@ -3046,7 +3049,7 @@ struct ContactDetailView: View {
         self.onIndexChanged = onIndexChanged
         // Use the provided initial index instead of finding it
         self._currentIndex = State(initialValue: initialIndex)
-        print("🔍 ContactDetailView init: Starting at provided index \(initialIndex) of \(contactsManager.favorites.count)")
+//         print("🔍 ContactDetailView init: Starting at provided index \(initialIndex) of \(contactsManager.favorites.count)")
     }
     
     var body: some View {
@@ -3065,7 +3068,7 @@ struct ContactDetailView: View {
                     )
                     .tag(index)
                     .onAppear {
-                        print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
+//                         print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
                     }
                 }
             }
@@ -3081,7 +3084,7 @@ struct ContactDetailView: View {
                 HStack {
                     // Left navigation button (previous) - DEBUG VERSION
                                     Button(action: {
-                                        print("🔍 LEFT BUTTON TAPPED!")
+//                                         print("🔍 LEFT BUTTON TAPPED!")
                                         if currentIndex > 0 {
                                             currentIndex -= 1
                                         } else {
@@ -3103,7 +3106,7 @@ struct ContactDetailView: View {
                     
                     // Right navigation button (next) - DEBUG VERSION
                                     Button(action: {
-                                        print("🔍 RIGHT BUTTON TAPPED!")
+//                                         print("🔍 RIGHT BUTTON TAPPED!")
                                         if currentIndex < contactsManager.favorites.count - 1 {
                                             currentIndex += 1
                                         } else {
@@ -3192,7 +3195,7 @@ struct ContactDetailPage: View {
             VStack(spacing: 20) {
                 // Contact Photo - Much larger, almost full screen, tappable for dialing
                             Button(action: {
-                                print("🔍 PICTURE TAPPED - Initiating dial!")
+//                                 print("🔍 PICTURE TAPPED - Initiating dial!")
                                 initiateCommunication()
                             }) {
                                 ContactPhotoViewRectangular(contactIdentifier: favorite.contactIdentifier, contactGivenName: favorite.contactGivenName, contactFamilyName: favorite.contactFamilyName, customImageFileName: $favorite.customImageFileName, width: geometry.size.width, height: geometry.size.height * 0.6)
@@ -3233,7 +3236,7 @@ struct ContactDetailPage: View {
                 
                 // Settings Button - Below phone number showing dial method
                 Button(action: {
-                    print("🔍 CALL METHOD TAPPED - Initiating dial!")
+//                     print("🔍 CALL METHOD TAPPED - Initiating dial!")
                     initiateCommunication()
                 }) {
                     HStack(spacing: 8) {
@@ -3305,7 +3308,7 @@ struct ContactDetailPage: View {
                     viewController.present(alert, animated: true)
                 }
             }
-            print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
+//             print("⚠️ Cannot use email address with \(favorite.communicationApp.displayName)")
             return // Exit without processing
         }
         
@@ -3351,15 +3354,15 @@ struct ContactDetailPage: View {
         }
         
         if let url = URL(string: urlString) {
-            print("🔍 ContactDetailPage Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
+//             print("🔍 ContactDetailPage Communication Debug: 🔍 Method: \(favorite.communicationMethod.rawValue) 🔍 App: \(favorite.communicationApp.rawValue) 🔍 Original Phone: \(favorite.phoneNumber) 🔍 Cleaned Phone: \(phoneNumber) 🔍 Final URL: \(urlString) 🔍 About to open URL: \(urlString)")
             DispatchQueue.main.async {
                 let options: [UIApplication.OpenExternalURLOptionsKey: Any] = [
                     .universalLinksOnly: false  // Allow custom URL schemes
                 ]
                 UIApplication.shared.open(url, options: options) { success in
-                    print("🔍 ContactDetailPage URL opened successfully: \(success)")
+//                     print("🔍 ContactDetailPage URL opened successfully: \(success)")
                     if !success {
-                        print("🔍 ContactDetailPage Failed to open URL: \(urlString)")
+//                         print("🔍 ContactDetailPage Failed to open URL: \(urlString)")
                     }
                 }
             }
@@ -3388,7 +3391,7 @@ struct ContactDetailPage: View {
                     .universalLinksOnly: false
                 ]
                 UIApplication.shared.open(url, options: options) { success in
-                    print("🔍 Method communication URL opened successfully: \(success)")
+//                     print("🔍 Method communication URL opened successfully: \(success)")
                 }
             }
         }
@@ -4016,6 +4019,8 @@ struct ContactDetailViewDirect: View {
     @State private var showingHelp = false
     @State private var showingAbout = false
     @State private var showingSuggestions = false
+    @AppStorage("enableVoiceName") private var enableVoiceName = false
+    @State private var voicePlayer: AVAudioPlayer?
     let onIndexChanged: (Int) -> Void
     let onReturnToFavorites: () -> Void
     
@@ -4025,7 +4030,7 @@ struct ContactDetailViewDirect: View {
         self.onIndexChanged = onIndexChanged
         self.onReturnToFavorites = onReturnToFavorites
         self._currentIndex = State(initialValue: initialIndex)
-        print("🔍 ContactDetailViewDirect init: Starting at provided index \(initialIndex) of \(favorites.count)")
+//         print("🔍 ContactDetailViewDirect init: Starting at provided index \(initialIndex) of \(favorites.count)")
     }
     
     var body: some View {
@@ -4048,10 +4053,10 @@ struct ContactDetailViewDirect: View {
                     Spacer()
                     
                     Button(action: { 
-                        print("🔍 INFO BUTTON TAPPED!")
-                        print("🔍 Before: showingInfoMenu = \(showingInfoMenu)")
+//                         print("🔍 INFO BUTTON TAPPED!")
+//                         print("🔍 Before: showingInfoMenu = \(showingInfoMenu)")
                         showingInfoMenu = true 
-                        print("🔍 After: showingInfoMenu = \(showingInfoMenu)")
+//                         print("🔍 After: showingInfoMenu = \(showingInfoMenu)")
                     }) {
                         Image(systemName: "info.circle")
                             .font(.title2)
@@ -4075,13 +4080,14 @@ struct ContactDetailViewDirect: View {
                         )
                         .tag(index)
                         .onAppear {
-                            print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
+//                             print("🔍 ContactDetailPage \(index) appeared for \(fav.displayName)")
                         }
                     }
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 .onChange(of: currentIndex) { _, newIndex in
                     onIndexChanged(newIndex)
+                    playVoiceName(for: newIndex)
                 }
             }
             
@@ -4153,6 +4159,60 @@ struct ContactDetailViewDirect: View {
         }
         .sheet(isPresented: $showingSuggestions) {
             SuggestionView()
+        }
+    }
+    
+    // MARK: - Voice Name Playback
+    private func playVoiceName(for index: Int) {
+        // Check if voice names are enabled
+        guard enableVoiceName else {
+//             print("🔇 Voice name disabled, skipping playback")
+            return
+        }
+        
+        // Ensure index is valid
+        guard index >= 0 && index < favorites.count else {
+//             print("❌ Invalid index for voice playback: \(index)")
+            return
+        }
+        
+        let favorite = favorites[index]
+        
+        // Check if this contact has a voice name
+        guard let voiceFileName = favorite.voiceNoteFileName else {
+//             print("🔇 No voice name for contact: \(favorite.displayName)")
+            return
+        }
+        
+//         print("🔊 Playing voice name for contact: \(favorite.displayName)")
+        
+        // Stop any currently playing voice
+        voicePlayer?.stop()
+        
+        // Get the voice file URL
+        guard let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: voiceFileName) else {
+//             print("❌ Voice file not found: \(voiceFileName)")
+            return
+        }
+        
+        // Configure audio session for playback
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+            
+            // Create and play audio player
+            voicePlayer = try AVAudioPlayer(contentsOf: fileURL)
+            voicePlayer?.volume = 1.0
+            voicePlayer?.prepareToPlay()
+            
+            if voicePlayer?.play() == true {
+//                 print("✅ Voice name playback started")
+            } else {
+//                 print("❌ Failed to start voice playback")
+            }
+        } catch {
+//             print("❌ Failed to play voice name: \(error)")
         }
     }
 }
@@ -4443,17 +4503,17 @@ struct VoiceRecorderView: View {
     // MARK: - Recording Functions
     
     private func startRecording() {
-        print("🎤 Requesting microphone permission...")
+//         print("🎤 Requesting microphone permission...")
         let audioSession = AVAudioSession.sharedInstance()
         
         // Request microphone permission
         audioSession.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 if granted {
-                    print("✅ Microphone permission granted")
+//                     print("✅ Microphone permission granted")
                     self.performRecording()
                 } else {
-                    print("❌ Microphone permission denied")
+//                     print("❌ Microphone permission denied")
                     // You could show an alert here
                 }
             }
@@ -4474,29 +4534,29 @@ struct VoiceRecorderView: View {
                 AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
             ]
             
-            print("🎤 Starting recording with settings:")
+//             print("🎤 Starting recording with settings:")
             print("   - Format: M4A (MPEG4AAC)")
             print("   - Sample Rate: 44100 Hz")
             print("   - Channels: 2 (Stereo)")
             print("   - Quality: High")
-            print("📁 Recording URL: \(recordingURL.path)")
+//             print("📁 Recording URL: \(recordingURL.path)")
             
             // Ensure Documents directory exists and is writable
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            print("📁 Documents directory: \(documentsPath.path)")
+//             print("📁 Documents directory: \(documentsPath.path)")
             
             // Check if Documents directory is writable
             if FileManager.default.isWritableFile(atPath: documentsPath.path) {
-                print("✅ Documents directory is writable")
+//                 print("✅ Documents directory is writable")
             } else {
-                print("❌ Documents directory is not writable!")
+//                 print("❌ Documents directory is not writable!")
                 return
             }
             
             // Remove existing file if it exists
             if FileManager.default.fileExists(atPath: recordingURL.path) {
                 try FileManager.default.removeItem(at: recordingURL)
-                print("🗑️ Removed existing recording file")
+//                 print("🗑️ Removed existing recording file")
             }
             
             audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
@@ -4504,13 +4564,13 @@ struct VoiceRecorderView: View {
             if audioRecorder?.prepareToRecord() == true {
                 let success = audioRecorder?.record() ?? false
                 if success {
-                    print("✅ Recording started successfully")
+//                     print("✅ Recording started successfully")
                 } else {
-                    print("❌ Failed to start recording - record() returned false")
+//                     print("❌ Failed to start recording - record() returned false")
                     return
                 }
             } else {
-                print("❌ Failed to prepare recording")
+//                 print("❌ Failed to prepare recording")
                 return
             }
             
@@ -4536,17 +4596,17 @@ struct VoiceRecorderView: View {
             }
             
         } catch {
-            print("❌ Failed to start recording: \(error)")
+//             print("❌ Failed to start recording: \(error)")
         }
     }
     
     private func stopRecording() {
-        print("🛑 Stopping recording at \(formatTime(recordingTime))")
+//         print("🛑 Stopping recording at \(formatTime(recordingTime))")
         
         // Stop the recorder first
         if let recorder = audioRecorder {
             recorder.stop()
-            print("🛑 Recorder stopped")
+//             print("🛑 Recorder stopped")
         }
         
         audioRecorder = nil
@@ -4561,31 +4621,31 @@ struct VoiceRecorderView: View {
     }
     
     private func checkAndCopyRecording() {
-        print("🔍 Checking for recording file at: \(recordingURL.path)")
+//         print("🔍 Checking for recording file at: \(recordingURL.path)")
         
         // Check if we have a recording
         if FileManager.default.fileExists(atPath: recordingURL.path) {
             hasExistingRecording = true
             hasNewRecording = true
-            print("✅ Recording file exists")
+//             print("✅ Recording file exists")
             
             // Get file size
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
                 if let fileSize = attributes[.size] as? Int64 {
-                    print("📊 Original file size: \(fileSize) bytes")
+//                     print("📊 Original file size: \(fileSize) bytes")
                     
                     if fileSize > 0 {
-                        print("✅ Recording file has content")
+//                         print("✅ Recording file has content")
                     } else {
-                        print("❌ Recording file is empty (0 bytes)")
+//                         print("❌ Recording file is empty (0 bytes)")
                     }
                 }
             } catch {
-                print("❌ Failed to get file attributes: \(error)")
+//                 print("❌ Failed to get file attributes: \(error)")
             }
         } else {
-            print("❌ No recording file found at: \(recordingURL.path)")
+//             print("❌ No recording file found at: \(recordingURL.path)")
         }
     }
     
@@ -4594,18 +4654,18 @@ struct VoiceRecorderView: View {
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
                 if let fileSize = attributes[.size] as? Int64 {
-                    print("📊 Recording file size at \(formatTime(recordingTime)): \(fileSize) bytes")
+//                     print("📊 Recording file size at \(formatTime(recordingTime)): \(fileSize) bytes")
                 }
             } catch {
-                print("❌ Failed to check file size: \(error)")
+//                 print("❌ Failed to check file size: \(error)")
             }
         } else {
-            print("❌ Recording file does not exist at \(formatTime(recordingTime))")
+//             print("❌ Recording file does not exist at \(formatTime(recordingTime))")
         }
     }
     
     private func playTestJingle() {
-        print("🎵 Playing test jingle (no recording found)")
+//         print("🎵 Playing test jingle (no recording found)")
         
         // Create a simple test tone
         let sampleRate: Double = 44100
@@ -4666,17 +4726,17 @@ struct VoiceRecorderView: View {
                 }
             }
             
-            print("✅ Test jingle started")
+//             print("✅ Test jingle started")
             
         } catch {
-            print("❌ Failed to play test jingle: \(error)")
+//             print("❌ Failed to play test jingle: \(error)")
             // Fallback: play system sound
             playSystemSound()
         }
     }
     
     private func playSystemSound() {
-        print("🔔 Playing system sound as fallback")
+//         print("🔔 Playing system sound as fallback")
         
         // Play a system sound
         AudioServicesPlaySystemSound(1005) // SMS sound
@@ -4694,7 +4754,7 @@ struct VoiceRecorderView: View {
             }
         }
         
-        print("✅ System sound played")
+//         print("✅ System sound played")
     }
     
     private func pausePlayback() {
@@ -4702,7 +4762,7 @@ struct VoiceRecorderView: View {
         isPlaying = false
         playbackTimer?.invalidate()
         playbackTimer = nil
-        print("⏸️ Playback paused")
+//         print("⏸️ Playback paused")
     }
     
     private func resumePlayback() {
@@ -4711,9 +4771,9 @@ struct VoiceRecorderView: View {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .default)
             try audioSession.setActive(true)
-            print("🔊 Audio session reconfigured for playback")
+//             print("🔊 Audio session reconfigured for playback")
         } catch {
-            print("❌ Failed to configure audio session for resume: \(error)")
+//             print("❌ Failed to configure audio session for resume: \(error)")
         }
         
         audioPlayer?.play()
@@ -4729,7 +4789,7 @@ struct VoiceRecorderView: View {
             }
         }
         
-        print("▶️ Playback resumed")
+//         print("▶️ Playback resumed")
     }
     
     private func stopPlayback() {
@@ -4744,9 +4804,9 @@ struct VoiceRecorderView: View {
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
-            print("🔇 Audio session deactivated")
+//             print("🔇 Audio session deactivated")
         } catch {
-            print("❌ Failed to deactivate audio session: \(error)")
+//             print("❌ Failed to deactivate audio session: \(error)")
         }
     }
     
@@ -4759,14 +4819,14 @@ struct VoiceRecorderView: View {
             favorite.voiceNoteFileName = nil
             hasExistingRecording = false
             hasNewRecording = true  // Enable Save button when deleting
-            print("🗑️ Deleted saved voice file: \(fileName)")
+//             print("🗑️ Deleted saved voice file: \(fileName)")
         }
         
         // Also clean up temp file if it exists
         if FileManager.default.fileExists(atPath: recordingURL.path) {
             do {
                 try FileManager.default.removeItem(at: recordingURL)
-                print("🗑️ Cleaned up temp recording file")
+//                 print("🗑️ Cleaned up temp recording file")
             } catch {
                 print("Failed to delete temp recording: \(error)")
             }
@@ -4774,11 +4834,11 @@ struct VoiceRecorderView: View {
     }
     
     private func saveRecording() {
-        print("💾 Saving recording to VoiceStorageManager")
+//         print("💾 Saving recording to VoiceStorageManager")
         
         // Check if temp file exists and has content
         guard FileManager.default.fileExists(atPath: recordingURL.path) else {
-            print("❌ No temp recording file found")
+//             print("❌ No temp recording file found")
             return
         }
         
@@ -4786,11 +4846,11 @@ struct VoiceRecorderView: View {
             // Read the temp file data
             let voiceData = try Data(contentsOf: recordingURL)
             guard voiceData.count > 0 else {
-                print("❌ Temp recording file is empty")
+//                 print("❌ Temp recording file is empty")
                 return
             }
             
-            print("📊 Temp recording file size: \(voiceData.count) bytes")
+//             print("📊 Temp recording file size: \(voiceData.count) bytes")
             
             // Save to VoiceStorageManager with unique filename
             if let fileName = VoiceStorageManager.shared.saveVoice(voiceData, for: favorite.contactIdentifier) {
@@ -4803,18 +4863,18 @@ struct VoiceRecorderView: View {
                 favorite.voiceNoteFileName = fileName
                 hasExistingRecording = true
                 
-                print("✅ Recording saved successfully: \(fileName)")
+//                 print("✅ Recording saved successfully: \(fileName)")
                 
                 // Clean up temp file
                 try FileManager.default.removeItem(at: recordingURL)
-                print("🗑️ Cleaned up temp recording file")
+//                 print("🗑️ Cleaned up temp recording file")
                 
             } else {
-                print("❌ Failed to save recording to VoiceStorageManager")
+//                 print("❌ Failed to save recording to VoiceStorageManager")
             }
             
         } catch {
-            print("❌ Failed to process recording: \(error)")
+//             print("❌ Failed to process recording: \(error)")
         }
     }
     
@@ -4822,64 +4882,25 @@ struct VoiceRecorderView: View {
         // Check if we have a saved voice file
         if let fileName = favorite.voiceNoteFileName {
             hasExistingRecording = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) != nil
-            print("🔍 Checked existing recording: \(hasExistingRecording ? "Found" : "Not found") - \(fileName)")
+//             print("🔍 Checked existing recording: \(hasExistingRecording ? "Found" : "Not found") - \(fileName)")
         } else {
             hasExistingRecording = false
-            print("🔍 No voice filename stored for this contact")
+//             print("🔍 No voice filename stored for this contact")
         }
     }
     
     private func playRecording() {
-        print("▶️ Playing recording")
+//         print("▶️ Playing recording - hasNewRecording: \(hasNewRecording)")
         
-        // First try to play from saved voice file
-        if let fileName = favorite.voiceNoteFileName,
-           let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
+        // If there's a new recording (unsaved), prioritize the temp file
+        if hasNewRecording && FileManager.default.fileExists(atPath: recordingURL.path) {
+//             print("🔊 Playing new unsaved recording from temp file")
             do {
                 // Configure audio session for playback
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playback, mode: .default)
                 try audioSession.setActive(true)
-                print("🔊 Audio session configured for playback")
-                
-                audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
-                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
-                audioPlayer?.prepareToPlay()
-                
-                let playResult = audioPlayer?.play() ?? false
-                if playResult {
-                    isPlaying = true
-                    playbackTime = 0
-                    
-                    // Start playback timer
-                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                        playbackTime = audioPlayer?.currentTime ?? 0
-                        
-                        // Stop timer when playback ends
-                        if !(audioPlayer?.isPlaying ?? false) {
-                            stopPlayback()
-                        }
-                    }
-                    
-                    print("✅ Playback started successfully from saved file: \(fileName)")
-                } else {
-                    print("❌ Failed to start playback")
-                    playTestJingle()
-                }
-                return
-            } catch {
-                print("❌ Failed to play saved recording: \(error)")
-            }
-        }
-        
-        // Fallback: try to play temp file if it exists
-        if FileManager.default.fileExists(atPath: recordingURL.path) {
-            do {
-                // Configure audio session for playback
-                let audioSession = AVAudioSession.sharedInstance()
-                try audioSession.setCategory(.playback, mode: .default)
-                try audioSession.setActive(true)
-                print("🔊 Audio session configured for playback")
+//                 print("🔊 Audio session configured for playback")
                 
                 audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
                 audioPlayer?.volume = 1.0 // Ensure volume is at maximum
@@ -4900,19 +4921,100 @@ struct VoiceRecorderView: View {
                         }
                     }
                     
-                    print("✅ Playback started successfully from temp file")
+//                     print("✅ Playback started successfully from temp file")
                 } else {
-                    print("❌ Failed to start playback")
+//                     print("❌ Failed to start playback from temp file")
                     playTestJingle()
                 }
                 return
             } catch {
-                print("❌ Failed to play temp recording: \(error)")
+//                 print("❌ Failed to play temp recording: \(error)")
+            }
+        }
+        
+        // If no new recording, try to play from saved voice file
+        if let fileName = favorite.voiceNoteFileName,
+           let fileURL = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) {
+//             print("🔊 Playing saved recording from saved file")
+            do {
+                // Configure audio session for playback
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+//                 print("🔊 Audio session configured for playback")
+                
+                audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
+                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
+                audioPlayer?.prepareToPlay()
+                
+                let playResult = audioPlayer?.play() ?? false
+                if playResult {
+                    isPlaying = true
+                    playbackTime = 0
+                    
+                    // Start playback timer
+                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        playbackTime = audioPlayer?.currentTime ?? 0
+                        
+                        // Stop timer when playback ends
+                        if !(audioPlayer?.isPlaying ?? false) {
+                            stopPlayback()
+                        }
+                    }
+                    
+//                     print("✅ Playback started successfully from saved file: \(fileName)")
+                } else {
+//                     print("❌ Failed to start playback")
+                    playTestJingle()
+                }
+                return
+            } catch {
+//                 print("❌ Failed to play saved recording: \(error)")
+            }
+        }
+        
+        // Fallback: try to play temp file if it exists (in case we're not in hasNewRecording state)
+        if FileManager.default.fileExists(atPath: recordingURL.path) {
+//             print("🔊 Playing temp file as fallback")
+            do {
+                // Configure audio session for playback
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default)
+                try audioSession.setActive(true)
+//                 print("🔊 Audio session configured for playback")
+                
+                audioPlayer = try AVAudioPlayer(contentsOf: recordingURL)
+                audioPlayer?.volume = 1.0 // Ensure volume is at maximum
+                audioPlayer?.prepareToPlay()
+                
+                let playResult = audioPlayer?.play() ?? false
+                if playResult {
+                    isPlaying = true
+                    playbackTime = 0
+                    
+                    // Start playback timer
+                    playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                        playbackTime = audioPlayer?.currentTime ?? 0
+                        
+                        // Stop timer when playback ends
+                        if !(audioPlayer?.isPlaying ?? false) {
+                            stopPlayback()
+                        }
+                    }
+                    
+//                     print("✅ Playback started successfully from temp file (fallback)")
+                } else {
+//                     print("❌ Failed to start playback")
+                    playTestJingle()
+                }
+                return
+            } catch {
+//                 print("❌ Failed to play temp recording: \(error)")
             }
         }
         
         // If no recording found, play test jingle
-        print("❌ No recording found to play")
+//         print("❌ No recording found to play")
         playTestJingle()
     }
     
