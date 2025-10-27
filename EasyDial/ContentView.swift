@@ -4361,7 +4361,7 @@ struct VoiceRecorderView: View {
                         }
                     } else if hasExistingRecording {
                         VStack(spacing: 10) {
-                            Text(isPlaying ? "Playing..." : "Existing Recording")
+                            Text(isPlaying ? "Playing..." : "5 Sec Recording")
                                 .font(.headline)
                                 .foregroundColor(.blue)
                             
@@ -4468,6 +4468,24 @@ struct VoiceRecorderView: View {
                         .disabled(isRecording || isPlaying)
                     }
                 }
+                
+                // Info note about enabling voice name feature
+                VStack(spacing: 5) {
+                    Text("To enable Voice Name on Contacts")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Text("Info > Enable Voice Name")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.top, 10)
                 
                 Spacer()
             }
@@ -4825,6 +4843,10 @@ struct VoiceRecorderView: View {
             hasExistingRecording = false
             hasNewRecording = true  // Enable Save button when deleting
 //             print("🗑️ Deleted saved voice file: \(fileName)")
+        } else {
+            // If deleting an unsaved recording, reset hasNewRecording
+            hasNewRecording = false
+            hasExistingRecording = false
         }
         
         // Also clean up temp file if it exists
@@ -5024,9 +5046,8 @@ struct VoiceRecorderView: View {
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        let seconds = Int(time)
+        return String(format: "%d Sec", seconds)
     }
 }
 
