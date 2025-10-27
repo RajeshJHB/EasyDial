@@ -151,8 +151,16 @@ class VoiceStorageManager {
         }
     }
     
-    func saveVoice(_ voiceData: Data, for contactId: String) -> String? {
-        let fileName = "\(contactId)_voice_\(UUID().uuidString).m4a"
+    func saveVoice(_ voiceData: Data, for contactId: String, duration: TimeInterval? = nil) -> String? {
+        var fileName = "\(contactId)_voice_\(UUID().uuidString)"
+        
+        // Add duration to filename if provided (format: _t_3_2 for 3.2 seconds)
+        if let duration = duration {
+            let durationStr = String(format: "%.1f", duration).replacingOccurrences(of: ".", with: "_")
+            fileName += "_t_\(durationStr)"
+        }
+        
+        fileName += ".m4a"
         let fileURL = voiceDirectory.appendingPathComponent(fileName)
         
         do {
@@ -206,6 +214,23 @@ class VoiceStorageManager {
         let fileURL = voiceDirectory.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         return fileURL
+    }
+    
+    // Extract duration from filename (e.g., "contactId_voice_UUID_t_3_2.m4a" -> 3.2)
+    func extractDuration(from fileName: String) -> TimeInterval? {
+        // Look for pattern: _t_X_Y or _t_X_Y_Z in filename
+        let pattern = "_t_(\\d+_\\d+)"
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        
+        if let match = regex?.firstMatch(in: fileName, options: [], range: NSRange(fileName.startIndex..., in: fileName)),
+           let durationRange = Range(match.range(at: 1), in: fileName) {
+            let durationStr = String(fileName[durationRange])
+            // Replace underscore with dot for parsing
+            let doubleStr = durationStr.replacingOccurrences(of: "_", with: ".")
+            return Double(doubleStr)
+        }
+        
+        return nil
     }
 }
 
@@ -4296,6 +4321,8 @@ struct VoiceRecorderView: View {
     @State private var isRecording = false
     @State private var isPlaying = false
     @State private var recordingTime: TimeInterval = 0
+    @State private var finalRecordingTime: TimeInterval = 0
+    @State private var savedRecordingDuration: TimeInterval = 0
     @State private var recordingTimer: Timer?
     @State private var hasExistingRecording = false
     @State private var hasNewRecording = false
@@ -4361,11 +4388,23 @@ struct VoiceRecorderView: View {
                         }
                     } else if hasExistingRecording {
                         VStack(spacing: 10) {
-                            Text(isPlaying ? "Playing..." : "5 Sec Recording")
+                            Text(isPlaying ? "Playing..." : "Max 5 Sec Recording")
                                 .font(.headline)
                                 .foregroundColor(.blue)
                             
-                            Text(formatTime(isPlaying ? playbackTime : (audioPlayer?.duration ?? 0)))
+                            // Show final recording time for new unsaved recordings, otherwise show saved duration
+                            let displayTime: TimeInterval = {
+                                if isPlaying {
+                                    return playbackTime
+                                } else if hasNewRecording {
+                                    return finalRecordingTime
+                                } else if savedRecordingDuration > 0 {
+                                    return savedRecordingDuration
+                                } else {
+                                    return audioPlayer?.duration ?? 0
+                                }
+                            }()
+                            Text(formatTime(displayTime))
                                 .font(.title2)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.blue)
@@ -4599,6 +4638,8 @@ struct VoiceRecorderView: View {
             
             isRecording = true
             recordingTime = 0
+            finalRecordingTime = 0
+            savedRecordingDuration = 0
             
             // Start timer
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
@@ -4625,6 +4666,9 @@ struct VoiceRecorderView: View {
     
     private func stopRecording() {
 //         print("🛑 Stopping recording at \(formatTime(recordingTime))")
+        
+        // Save the final recording time before stopping
+        finalRecordingTime = recordingTime
         
         // Stop the recorder first
         if let recorder = audioRecorder {
@@ -4821,7 +4865,7 @@ struct VoiceRecorderView: View {
         isPlaying = false
         playbackTimer?.invalidate()
         playbackTimer = nil
-        playbackTime = 0
+        // Don't reset playbackTime, keep it at the final position
         
         // Reset audio session
         do {
@@ -4879,8 +4923,8 @@ struct VoiceRecorderView: View {
             
 //             print("📊 Temp recording file size: \(voiceData.count) bytes")
             
-            // Save to VoiceStorageManager with unique filename
-            if let fileName = VoiceStorageManager.shared.saveVoice(voiceData, for: favorite.contactIdentifier) {
+            // Save to VoiceStorageManager with unique filename including duration
+            if let fileName = VoiceStorageManager.shared.saveVoice(voiceData, for: favorite.contactIdentifier, duration: finalRecordingTime) {
                 // Delete old voice file if it exists
                 if let oldFileName = favorite.voiceNoteFileName {
                     VoiceStorageManager.shared.deleteVoice(named: oldFileName)
@@ -4909,6 +4953,12 @@ struct VoiceRecorderView: View {
         // Check if we have a saved voice file
         if let fileName = favorite.voiceNoteFileName {
             hasExistingRecording = VoiceStorageManager.shared.getVoiceFileURL(named: fileName) != nil
+            
+            // Extract duration from filename if available
+            if let duration = VoiceStorageManager.shared.extractDuration(from: fileName) {
+                savedRecordingDuration = duration
+            }
+            
 //             print("🔍 Checked existing recording: \(hasExistingRecording ? "Found" : "Not found") - \(fileName)")
         } else {
             hasExistingRecording = false
@@ -5046,8 +5096,7 @@ struct VoiceRecorderView: View {
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
-        let seconds = Int(time)
-        return String(format: "%d Sec", seconds)
+        return String(format: "%.1f Sec", time)
     }
 }
 
