@@ -631,8 +631,8 @@ struct ContentView: View {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
 //                 print("📱 Notification permission granted")
-            } else if let error = error {
-//                 print("❌ Notification permission error: \(error.localizedDescription)")
+            } else if error != nil {
+//                 print("❌ Notification permission error: \(error!.localizedDescription)")
             }
         }
     }
@@ -654,8 +654,8 @@ struct ContentView: View {
         )
         
         UNUserNotificationCenter.current().add(firstRequest) { error in
-            if let error = error {
-//                 print("❌ Failed to schedule first notification: \(error.localizedDescription)")
+            if error != nil {
+//                 print("❌ Failed to schedule first notification: \(error!.localizedDescription)")
             } else {
 //                 print("📱 First notification scheduled successfully (2 seconds)")
             }
@@ -671,8 +671,8 @@ struct ContentView: View {
         )
         
         UNUserNotificationCenter.current().add(repeatingRequest) { error in
-            if let error = error {
-//                 print("❌ Failed to schedule repeating notification: \(error.localizedDescription)")
+            if error != nil {
+//                 print("❌ Failed to schedule repeating notification: \(error!.localizedDescription)")
             } else {
 //                 print("📱 Repeating notification scheduled successfully (every 60 seconds)")
             }
@@ -4566,10 +4566,9 @@ struct VoiceRecorderView: View {
     
     private func startRecording() {
 //         print("🎤 Requesting microphone permission...")
-        let audioSession = AVAudioSession.sharedInstance()
         
-        // Request microphone permission
-        audioSession.requestRecordPermission { granted in
+        // Request microphone permission using AVAudioApplication
+        AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 if granted {
 //                     print("✅ Microphone permission granted")
@@ -4720,8 +4719,8 @@ struct VoiceRecorderView: View {
         if FileManager.default.fileExists(atPath: recordingURL.path) {
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
-                if let fileSize = attributes[.size] as? Int64 {
-//                     print("📊 Recording file size at \(formatTime(recordingTime)): \(fileSize) bytes")
+                if attributes[.size] != nil {
+//                     print("📊 Recording file size check completed")
                 }
             } catch {
 //                 print("❌ Failed to check file size: \(error)")
@@ -4746,11 +4745,6 @@ struct VoiceRecorderView: View {
             let time = Double(i) / sampleRate
             let sample = sin(2.0 * Double.pi * frequency * time) * 0.3 // 30% volume
             audioData.append(Float(sample))
-        }
-        
-        // Convert to PCM data
-        let audioBuffer = audioData.withUnsafeBufferPointer { buffer in
-            Data(buffer: buffer)
         }
         
         // Create audio format
